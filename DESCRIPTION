@@ -1,0 +1,19 @@
+Package: scATACCNV 
+Version: 0.1
+Depends:
+  biomaRt (>= 2.42.1),
+  Rtsne (>= 0.15),
+  FNN (>= 1.1.3),
+  igraph (>= 1.2.5),
+  data.table (>= 1.12.8),
+  changepoint (>= 2.2.2),
+  zoo (>= 1.8-8),
+  mclust (>= 5.4.6),
+  stringr (>= 1.4.0),
+  edgeR (>= 3.28.1),
+  limma (>= 3.42.2),
+  tidyr (>= 1.1.0),
+  tibble (>= 3.0.3),
+  gplots (>= 3.0.4),
+  dplyr (>= 1.0.0)
+RoxygenNote: 7.1.1
