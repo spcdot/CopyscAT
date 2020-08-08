@@ -1841,14 +1841,20 @@ graphSmoothDM <- function(clusterOutputs,origData,dm_outputs,numNN=0,perplex=20)
 #' @param targetFun - target function to identify LOH regions
 #' @param signalBoost - value to add prior to logtransforming signal
 #' @param lossCutoffReads
+#' @param quantileLimit
 #' @keywords LOH
 #' @keywords CNV
 #' @export
-getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100)
+getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3)
 {
   #c("E","V")
-  inputMatrix<-inputMatrixIn %>% mutate(cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(arm=scCNVCaller$cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% select(-arm,-blacklist) #%>%  #cpg+
-  inputMatrix<-inputMatrix %>% filter(chrom!="chrY") 
+  inputMatrix<-data.table(inputMatrixIn)
+  inputMatrix<-inputMatrix[,cpg:=scCNVCaller$cpg_data$cpg_density]
+  inputMatrix<-inputMatrix[,arm:=scCNVCaller$cytoband_data$V4]
+  inputMatrix<-inputMatrix[which(inputMatrix[,arm!="cen" & blacklist==0 & cpg!=0])]
+  inputMatrix<-inputMatrix[,c("raw_medians","blacklist","cpg","arm"):=NULL]
+  #inputMatrix<-input
+  #%>% mutate(cpg=cpg_data$cpg_density) %>% mutate(arm=cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% select(-arm,-blacklist) #%>%  #cpg+
   #check if raw_medians
   if ("raw_medians" %in% colnames(inputMatrix))
   {
@@ -1856,11 +1862,11 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   }
   #mutate
   #view(inputMatrix$cpg)
-  #inputMatrix<-inputMatrix %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(log(cpg,base=2))))
+  #inputMatrix<-inputMatrix %>% mutate_at(vars(ends_with("-1")),funs(./(log(cpg,base=2))))
   #print(nrow(inputMatrix))
   chromList<-unique(inputMatrix$chrom)
   #print(chromList)
-  dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(-chrom,-pos,-cpg)),stringsAsFactors=FALSE)
+  dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
   alteration_list=c()
   last_coords=c(0,0)
   alteration_delta=c()
@@ -1874,11 +1880,20 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   #may not need IQR, may work with mean/median instead
   for (targetChrom in chromList)
   {
+    inputMatrixK<-inputMatrix[which(inputMatrix[,chrom==targetChrom])]
+    tmp_coords<-inputMatrixK[,c("chrom","pos")] 
+    # print(tail(colnames(inputMatrixK)))
+    #print(transpose(inputMatrixK[,chrom:=NULL],make.names = "pos"))
+    #print(str(transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")))
+    #print(tail(colnames((transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")))))
     #message(targetChrom)
-    IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% select(ends_with(scCNVCaller$cellSuffix)),1,quantile,0.3,na.rm=TRUE)
-    IQRs<-scale(IQRv,center=TRUE,scale=TRUE)
-    expectedSignal<-inputMatrix %>% filter(chrom==targetChrom) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,median) %>% gather(barcode,value) %>% summarise_if(is.numeric,mean)
-    
+    IQRv<-transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")[,lapply(.SD,quantile,quantileLimit,na.rm=TRUE)]
+    # print(IQRv)
+    #IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% select(scCNVCaller$cellSuffix),1,quantile,0.3,na.rm=TRUE)
+    IQRs<-scale(t(IQRv),center=TRUE,scale=TRUE)
+    #expectedSignal<-inputMatrix %>% filter(chrom==targetChrom) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,median) %>% gather(barcode,value) %>% summarise_if(is.numeric,mean)
+    expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,median)][,chrom:=NULL],make.names="pos")[,lapply(.SD,mean)]
+    # print(IQRs)
     cm<-cpt.meanvar(data=as.vector(IQRs),test.stat="Normal", penalty="AIC",method = "PELT",minseglen = minSeg)
     print(plot(cm,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score"))
     cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
@@ -1887,40 +1902,40 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     print(cptlist)
     if (is.na(cptlist$Diff[1]))
     {
-    #  message(cptlist$Diff[1])
+      #  message(cptlist$Diff[1])
       cptlist$Diff[1]=cptlist$Point[1]-1
-    #  message(cptlist$Diff[1])
+      #  message(cptlist$Diff[1])
     }
-   # print(cptlist)
+    # print(cptlist)
     #set up list of double minutes; cutoff 0.002
     #1.05e-4
     coord_list<-vector(mode = "list")
     d_loss<-cptlist %>% filter(Mean<(lossCutoff))
     d_lossb<-d_loss
-   # print(d_loss)
+    # print(d_loss)
     if (nrow(d_loss)>0)
     {
-    tmp_coords<-inputMatrix  %>% filter(chrom==targetChrom) %>% select(chrom,pos)
-    d_lossb<-d_loss %>% mutate(startCoord=as.numeric(tmp_coords$pos[Point-Diff]),endCoord=as.numeric(tmp_coords$pos[Point]),startChrom=tmp_coords$chrom[Point])
-   # print(d_lossb)
-    #d_lossb<-d_lossb %>% filter((endCoord-startCoord)>=minLength) 
-    tmpb_merged<-d_lossb %>% mutate(touching=(startCoord==lag(endCoord)))
-    tmpb_merged$touching[1]<-FALSE #otherwise NA
-    tmpb_merged <- tmpb_merged %>% mutate(startCoord=if_else(touching==TRUE,lag(startCoord),startCoord),Diff=if_else(touching==TRUE,Diff+lag(Diff),Diff))
-    #print(length(which(tmpb_merged$touching==TRUE)))
-  #  print(tmpb_merged)
-   # print(which(tmpb_merged$touching==TRUE)-1)
-    if (length(which(tmpb_merged$touching==TRUE)) > 0)
-    {
-      tmp_merged_final<-tmpb_merged %>% filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% select(-touching)
-      d_lossb<-tmp_merged_final
+      #%>% filter(chrom==targetChrom) %>% select(chrom,pos)
+      d_lossb<-d_loss %>% mutate(startCoord=as.numeric(tmp_coords$pos[Point-Diff]),endCoord=as.numeric(tmp_coords$pos[Point]),startChrom=tmp_coords$chrom[Point])
+      # print(d_lossb)
+      #d_lossb<-d_lossb %>% filter((endCoord-startCoord)>=minLength) 
+      tmpb_merged<-d_lossb %>% mutate(touching=(startCoord==lag(endCoord)))
+      tmpb_merged$touching[1]<-FALSE #otherwise NA
+      tmpb_merged <- tmpb_merged %>% mutate(startCoord=if_else(touching==TRUE,lag(startCoord),startCoord),Diff=if_else(touching==TRUE,Diff+lag(Diff),Diff))
+      #print(length(which(tmpb_merged$touching==TRUE)))
+      #  print(tmpb_merged)
+      # print(which(tmpb_merged$touching==TRUE)-1)
+      if (length(which(tmpb_merged$touching==TRUE)) > 0)
+      {
+        tmp_merged_final<-tmpb_merged %>% filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% select(-touching)
+        d_lossb<-tmp_merged_final
+      }
+      d_lossb <- d_lossb %>% arrange(startChrom,as.numeric(startCoord))
+      #print(d_lossb)
     }
-    d_lossb <- d_lossb %>% arrange(startChrom,as.numeric(startCoord))
-    #print(d_lossb)
-    }
-     #
-      #coord_list<-append(coord_list,list(c(last_coords[1],last_coords[2])))
-      #change this to loop
+    #
+    #coord_list<-append(coord_list,list(c(last_coords[1],last_coords[2])))
+    #change this to loop
     if (nrow(d_lossb)>=1)
     {
       for (i in 1:nrow(d_lossb))
@@ -1929,98 +1944,98 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         last_coords[2]<-d_lossb$endCoord[i]
         alterationName<-str_c(targetChrom,sprintf(fmt="%d",last_coords[1]),sprintf(fmt="%d",last_coords[2]),sep="_")
         # message(seg_length)
-          
+        
         posList=seq(from=last_coords[1],to=last_coords[2],by = 1e6)
         posList<-sprintf(fmt="%d",posList)
         #posList
         #or max
         #print(head(expectedSignal,n=1))
-        t2<-inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,max) # %>% select(-cpg)
-        t2d<-t2 %>% gather(Cell,Value)
-       # print(t2d)
-       # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
-       # print(targetChrom)
-       # print(posList)
-        fit1<-Mclust(-1*log2(t2d$Value+signalBoost),G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
+        t2d<-inputMatrixK[which(inputMatrixK[,pos %in% posList])][,pos:=NULL][,lapply(.SD,max)] # %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,max) # %>% select(-cpg)
+        #t2d<-t2 %>% gather(Cell,Value)
+        #  print(t2d)
+        # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
+        # print(targetChrom)
+        # print(posList)
+        fit1<-Mclust(-1*log2(t2d+signalBoost),G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
         if (length(fit1)==0)
         {
-           message("broken")
-           next()
+          message("broken")
+          next()
         }
         message(fit1$G)
-          #plot(fit1)
-          #if (!is.na(fit1))
-          #{
-          #print(plot(fit1))
-          if (fit1$G>2)
+        #plot(fit1)
+        #if (!is.na(fit1))
+        #{
+        #print(plot(fit1))
+        if (fit1$G>2)
+        {
+          #collapse clusters
+          print(fit1$parameters)
+          fit1$classification[fit1$classification==2]<-1
+          fit1$classification[fit1$classification==3]<-2
+          clust1_mean<-mean(fit1$parameters$mean[1:2])
+          clust2_mean<-fit1$parameters$mean[3]
+          #      print(clust2_mean)
+          signalDiff=2^(-1*clust2_mean)-expectedSignalN-signalBoost
+          delta_mean = clust2_mean-clust1_mean
+          #print(clust2_mean-clust1_mean)
+          #      delta_mean
+          #      message(delta_mean)
+          if (abs(delta_mean)>diffThreshold && (signalDiff<(-1*lossCutoffReads)))
           {
-            #collapse clusters
-           print(fit1$parameters)
-            fit1$classification[fit1$classification==2]<-1
-            fit1$classification[fit1$classification==3]<-2
-            clust1_mean<-mean(fit1$parameters$mean[1:2])
-            clust2_mean<-fit1$parameters$mean[3]
-            print(clust2_mean)
-            signalDiff=2^(-1*clust2_mean)-expectedSignal$value-signalBoost
-                 delta_mean = clust2_mean-clust1_mean
-                 #print(clust2_mean-clust1_mean)
-            #      delta_mean
-            #      message(delta_mean)
-                 if (abs(delta_mean)>diffThreshold && (signalDiff<(-1*lossCutoffReads)))
-                 {
-                    alteration_list<-cbind(alteration_list,alterationName)
-                    alteration_delta<-cbind(alteration_delta,signalDiff)
-                    fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
+            alteration_list<-cbind(alteration_list,alterationName)
+            alteration_delta<-cbind(alteration_delta,signalDiff)
+            fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
             #message(fit1$parameters$mean)
-                    dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
-                  }
-            #      #message(fit1$parameters)
+            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
           }
-          if (fit1$G==2)
+          #      #message(fit1$parameters)
+        }
+        if (fit1$G==2)
+        {
+          #check for and collapse cluster assignments
+          #cells in 2 with val < 1 and vice versa
+          fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
+          fit1$classification[fit1$data>fit1$parameters$mean[2] & fit1$classification==1]<-2
+          delta_mean = fit1$parameters$mean[2]-fit1$parameters$mean[1]
+          #message(str_c(delta_mean,"MEAN"))
+          #       print(delta_mean)
+          signalDiff=2^(-1*fit1$parameters$mean[2])-expectedSignalN-signalBoost
+          if (abs(delta_mean)>diffThreshold && (signalDiff<(-1*lossCutoffReads)))
           {
-            #check for and collapse cluster assignments
-            #cells in 2 with val < 1 and vice versa
-            fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
-            fit1$classification[fit1$data>fit1$parameters$mean[2] & fit1$classification==1]<-2
-            delta_mean = fit1$parameters$mean[2]-fit1$parameters$mean[1]
-            #message(str_c(delta_mean,"MEAN"))
-            print(delta_mean)
-            signalDiff=2^(-1*fit1$parameters$mean[2])-expectedSignal$value-signalBoost
-            if (abs(delta_mean)>diffThreshold && (signalDiff<(-1*lossCutoffReads)))
-            {
-              alteration_list<-cbind(alteration_list,alterationName)
-              alteration_delta<-cbind(alteration_delta,signalDiff)
-              #add delta mean
-              #message(fit1$parameters$mean)
-              #uncertainty less than 0.2
-              fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
-              dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
-            }
-         # }
-        #  }
+            alteration_list<-cbind(alteration_list,alterationName)
+            alteration_delta<-cbind(alteration_delta,signalDiff)
+            #add delta mean
+            #message(fit1$parameters$mean)
+            #uncertainty less than 0.2
+            fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
+            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
+          }
+          # }
+          #  }
         }
       }
     }
     #cleanup
-   
+    
   }
   #final cleanup
   if (length(alteration_list)>0)
   {
-  colnames(dm_per_cell_vals)[2:ncol(dm_per_cell_vals)]<-alteration_list
-  
-  #cutoff for minimum # of cells
-  #count # of cells in each cluster
-  #rowSums(.[2:ncol(cellQuality)]>0)
-  loss_cluster_counts<-dm_per_cell_vals %>% gather(Alteration,Clust,2:ncol(dm_per_cell_vals)) %>% group_by(Alteration) %>% count(Alteration,Clust)
-  print(loss_cluster_counts)
-  min_loss<-loss_cluster_counts %>% spread(Clust,n) %>% select(-'0') %>% mutate(min=min(`1`,`2`))
-  print(min_loss)
-  min_loss[is.na(min_loss)]<-0
-  #min_loss$Alteration[min_loss$min>lossCutoffCells]
-  #cut appropriately
-  dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells])
-  return(list(dm_per_cell_vals,alteration_list,alteration_delta))
+    colnames(dm_per_cell_vals)[2:ncol(dm_per_cell_vals)]<-alteration_list
+    
+    #cutoff for minimum # of cells
+    #count # of cells in each cluster
+    #rowSums(.[2:ncol(cellQuality)]>0)
+    loss_cluster_counts<-dm_per_cell_vals %>% gather(Alteration,Clust,2:ncol(dm_per_cell_vals)) %>% group_by(Alteration) %>% count(Alteration,Clust)
+    #  print(loss_cluster_counts)
+    min_loss<-loss_cluster_counts %>% spread(Clust,n) %>% select(-'0') %>% mutate(min=min(`1`,`2`))
+    #  print(min_loss)
+    min_loss[is.na(min_loss)]<-0
+    #min_loss$Alteration[min_loss$min>lossCutoffCells]
+    #cut appropriately
+    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells])
+    return(list(dm_per_cell_vals,alteration_list,alteration_delta))
   }
   return(list())
 }
@@ -2253,4 +2268,159 @@ readInputTable<-function(inputFile,sep="\t")
   rownames(scData)<-scData$Cell_id
   scData<-scData %>% select(-Cell_id)
   return(scData)
+}
+#' smoothClusters
+#' Read clusters from file and CNV calls from input or an external file
+#' Note: assumes files are comma delimited
+#' Returns a smoothed matrix
+#' @param inputClusterFile   input cluster matrix
+#' @param inputCNVList   list of CNVs with copy number estimates (2 as normal)
+#' @param inputCNVClusterFile  alternate option to specify external comma delimited file for CNV calls
+#' @param percentPositive   minimum percentage of a cluster to use to call positive for CNV, default is 0.5 (50%)
+#' @keywords CNV
+#' @keywords clusters
+#' @export
+smoothClusters <- function(inputClusterFile,inputCNVList,inputCNVClusterFile="",percentPositive=0.5) 
+{
+  inputClusters<-read.table(inputClusterFile,stringsAsFactors=FALSE,header=TRUE,sep=",")
+  colnames(inputClusters)[2]<-"clust"
+  inputCNV<-""
+  if (inputCNVClusterFile!="")
+  {
+    inputCNV<-read.table(inputCNVClusterFile,stringsAsFactors=FALSE,header=TRUE,sep=",")
+    inputCNV <- inputCNV %>% mutate_at(vars(starts_with("chr")),list(as.double))
+    #print(inputCNV
+    
+  }
+  else
+  {
+    #input from CNV calls
+    inputCNV<-inputCNVList[[1]]
+    #colnames(inputCNV)[1]<-"Barcode"
+  }
+  colnames(inputCNV)[1]<-"Barcode"
+  #print(colnames(inputClusters))
+  #print(inputClusters$Barcode)
+  
+  #colnames(inputClusters)[1]<-"Barcode"
+  #print(inputClusters[,1])
+  b1<-left_join(inputClusters,inputCNV,by="Barcode")
+  #SMOOTH
+  b1c<-b1 %>% mutate(clust=inputClusters[,2])
+  b1c_round<-b1c %>% mutate_at(vars(starts_with("chr")),funs(if_else(is.na(.),2,.))) %>% 
+    group_by(clust) %>% summarise_at(vars(starts_with("chr")),list(mean))  %>% 
+    mutate_at(vars(starts_with("chr")),funs(round(. + (0.5 - percentPositive),digits=0)))
+  cluster_clean<-left_join(inputClusters,b1c_round,by="clust")
+  return(cluster_clean)
+}
+#' generateReferences
+#' Generate reference files from UCSC for genome of interest
+#' Returns CPG, chromosome size and cytoband data into target directory
+#' @param genomeObject   BSgenome object of interest
+#' @param genomeText   Shorthand for genome in UCSC (defaults to hg38)
+#' @param tileWidth  Width of tiles - (default: 1e6)
+#' @param outputDir   Output directory to save reference files to (default: ~)
+#' @keywords CNV
+#' @keywords reference
+#' @export
+generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outputDir="~")
+{
+  fileSuffixes=str_c(outputDir,"/",genomeText,"_",tileWidth,sep="")
+  print(str_c("Output to ",fileSuffixes,sep=""))
+  #chrom sizes - 
+  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn",negate=TRUE)) %>% filter(keeper==TRUE) %>% select(-keeper)
+  chrom_sizes
+  chroms<-GRanges(seqnames=genomeObject@seqinfo)
+  #https://bioconductor.org/packages/devel/bioc/vignettes/rtracklayer/inst/doc/rtracklayer.pdf
+  #print(chrom_sizes)
+  #a<-tile(chroms,width=1e6)
+  #tile the genome
+  tiles<-tileGenome(seqlengths(genomeObject),tilewidth=tileWidth,cut.last.tile.in.chrom=T)
+  print(tiles)
+  mySession = browserSession("UCSC")
+  genome(mySession) <- genomeText
+  tbl.cytobands <- getTable(
+    ucscTableQuery(mySession, track="cytoBand",
+                   table="cytoBand"))
+  tbl.cpgIslandExt <- getTable(
+    ucscTableQuery(mySession, track="cpgIslandExtUnmasked",
+                   table="cpgIslandExtUnmasked"))
+  
+  tbl.cytobands
+  tbl.cytobands<-GRanges(tbl.cytobands)
+  tbl.cpgIslandExt<-GRanges(tbl.cpgIslandExt)
+  #now intersect these to generate the reference files
+  #http://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/findOverlaps-methods.html
+  #MATCHES FOR Cytoband
+  mcols(tbl.cytobands)$gieStain<-NULL
+  tbl.cytobands$name<-as.character(tbl.cytobands$name)
+  tbl.cytobands$name<-str_remove(tbl.cytobands$name,"[0-9.]+")
+  
+  matches<-findOverlaps(tbl.cytobands,tiles,select="all",ignore.strand=TRUE)
+  matches
+  a3<-tiles[subjectHits(matches)]
+  subjectHits(matches)
+  tiles
+  a3
+  #metadtaa
+  tbl.cytobands[queryHits(matches)]
+  tbl.cytobands
+  mcols(a3) <- cbind.data.frame(
+    mcols(a3),
+    mcols(tbl.cytobands[queryHits(matches)]))
+  #head(a3,n=50)
+  #label Cytobands
+  #https://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/GRanges-class.html
+  #ALL CLEAN :)
+  a3<-unique(a3)
+  #overlap stuff again to remove doubles
+  
+  #label CPGs
+  head(tbl.cpgIslandExt)
+  tbl.cpgIslandExt<-sort.GenomicRanges(tbl.cpgIslandExt)
+  matches<-findOverlaps(tiles,tbl.cpgIslandExt,select="all",ignore.strand=TRUE)
+  #sum up the stuff
+  #https://www.rdocumentation.org/packages/S4Vectors/versions/0.4.0/topics/Hits-class
+  
+  b1<-tbl.cpgIslandExt[subjectHits(matches)]
+  b1
+  mcols(b1) <- cbind.data.frame(
+    mcols(b1),
+    ranges(tiles[queryHits(matches)]),
+    chrom(tiles[queryHits(matches)]))
+  print(b1)
+  print(tiles[queryHits(matches)])
+  
+  
+  #NEED TO FIND TILES THAT AREN'T MATCHES
+  length(unique(queryHits(matches)))
+  #
+  b1t<-as_tibble(b1)
+  #subjectHits vs queryHits
+  b1t<-b1t %>% mutate(interval=str_c(chrom.tiles.queryHits.matches...,start.1,end.1,sep="-"))
+  b1t$interval
+  b1t2<-b1t %>% group_by(interval) %>% summarise_at(vars(cpgNum),sum) %>% separate(interval,into=c("chrom","start","end"),sep="-")
+  #missing a few here
+  #GET EMPTIES
+  empties<-tiles[-unique(queryHits(matches))]
+  mcols(empties)<-cbind.data.frame(mcols(empties),cpgNum=0)
+  empties
+  #add empties to zero (cpgNum = 0)
+  
+  cpg_densities<-sort.GenomicRanges(append(GRanges(b1t2),empties))
+  cpg_densities
+  #TODO: fill with missing zeros
+  
+  #REMOVE GARBAGE CHROMOSOMES
+  cpg_densities<-keepStandardChromosomes(cpg_densities,pruning.mode = "tidy")
+  cytoband_densities<-keepStandardChromosomes(a3,pruning.mode="tidy")
+  cytoband_densities
+  #keepSeqlevels(cpg_densities,chrom_sizes$chrom[1:15])
+  as_tibble(cpg_densities)
+  tail(cytoband_densities)
+  sort.GenomicRanges(cytoband_densities)
+  
+  write.table(as_tibble(sort.GenomicRanges(cpg_densities))[,c(1:3,6)],str_c(fileSuffixes,"_cpg_densities.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)
+  write.table(as_tibble(sort.GenomicRanges(cytoband_densities))[,c(1:3,6)],str_c(fileSuffixes,"_cytoband_densities_granges.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)
+  write.table(as_tibble(chrom_sizes),str_c(outputDir,"/",genomeText,"_chrom_sizes.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)
 }

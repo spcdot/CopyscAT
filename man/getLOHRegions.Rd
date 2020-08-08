@@ -14,7 +14,8 @@ getLOHRegions(
   lossCutoffCells = 100,
   targetFun = IQR,
   signalBoost = 1e-06,
-  lossCutoffReads = 100
+  lossCutoffReads = 100,
+  quantileLimit = 0.3
 )
 }
 \arguments{
