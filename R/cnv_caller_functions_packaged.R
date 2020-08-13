@@ -208,13 +208,16 @@ normalizeMatrix <- function(inputMatrix,logNorm=TRUE,maxZero=500,imputeZeros=FAL
 #' @param priorCount - use if log normalizing data - priorCount to add to fields before normalisation
 #' @param blacklistCutoff - minimum signal in a bin to count it as "empty" for the blacklist cutoff
 #' @param dividingFactor - deprecated
+#' @param upperFilterQuantile - exclude cells with reads above % percentile (to avoid doublets)
 #' @export
-normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=500,imputeZeros=FALSE,blacklistProp=0.8, priorCount=1,blacklistCutoff=0,dividingFactor=1e6)
+normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=500,imputeZeros=FALSE,blacklistProp=0.8, priorCount=1,blacklistCutoff=0,dividingFactor=1e6,upperFilterQuantile=0.95)
 {
   sc_t<-data.table(t(inputMatrix))
   #sc_t
   cellReads<-transpose(sc_t[,lapply(.SD,sum)],keep.names="Cell")
   readsCells=cellReads[,mean(V1)]
+  #apply quantile filter
+  sc_t[,cellReads[cellReads[,V1>quantile(cellReads$V1,upperFilterQuantile)]]$Cell:=NULL]
   nCells<-nrow(cellReads)
   print(str_c("Total number of starting cells: ",nCells," Average reads per cell: ",mean(readsCells)))
   scCNVCaller$meanReadsPerCell<-readsCells
@@ -1329,8 +1332,10 @@ makeFakeCells<-function(x,num=300,sd_fact=0.1){
 #' @param num (number of cells)
 #' @param sd_fact (scaling factor for cell SD)
 #' @export
-identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,propDummy=0.1, maxClust=4,deltaMean=0.10, minDiff=0.25,deltaBIC2=50, bicMinimum=5,minMix=0.3,subsetSize=500,fakeCellSD=0.2,uncertaintyCutoff=1, summaryFunction=cutAverage)
+identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,propDummy=0.1, maxClust=4,deltaMean=0.10, minDiff=0.25,deltaBIC2=50, bicMinimum=5,minMix=0.3,subsetSize=500,fakeCellSD=0.2,uncertaintyCutoff=1, summaryFunction=cutAverage,mergeCutoff=0.5)
 {
+  pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_cnv_summary.pdf"),width=8,height=6)
+  
   scData_chrom<-inputMatrix
   median_chrom_signal<-median_iqr[[1]]
   median_chrom_signal_filter <- median_chrom_signal %>% filter(chrom %in% scData_chrom$chrom) %>% filter(chrom!="chrX",chrom!="chrY")
@@ -1382,7 +1387,14 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
     scData_chrom_spread <- scaleMatrix(scData_chrom2,median_iqr_list = list(median_chrom_signal_filter,IQR_chrom_signal_filter),spread = TRUE)
   }
   #NOW DO GAUSSIAN CLUSTERING
-  print(ggplot(scData_chrom_spread,aes(chrom,Density))+geom_violin(scale="width") + theme(axis.text.x=element_text(angle=-90,hjust = 0,vjust=0.5))) 
+  print(ggplot(scData_chrom_spread,aes(chrom,Density))+geom_violin(scale="width") + theme(axis.text.x=element_text(angle=-90,hjust = 0,vjust=0.5),
+                                                                                          
+                                                                                          axis.text.y=element_text(color="#000000"),
+                                                                                          axis.line.x.bottom = element_line(colour="#000000"),
+                                                                                          axis.line.y.left =  element_line(colour="#000000"),
+                                                                                          panel.background = element_rect(fill="#ffffff"),
+                                                                                          plot.background = element_rect(color="#ffffff",fill="#ffffff")) +
+          xlab("Segment")) 
   
   #initialize variables for clustering
   cell_ids=unique(scData_chrom_spread$Cell)
@@ -1431,7 +1443,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
       }
       if ((deltaBIC < bicMinimum) | (minProp < propCutoff))
       {
-        message(median_chrom_signal_filter$chrom[m5])
+        #message(median_chrom_signal_filter$chrom[m5])
         
         #redo as single gaussian
         fit = Mclust(dens1$Density,G=1,prior = priorControl(),model="V",initialization = initParams)
@@ -1448,6 +1460,8 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
           varChange <- (arrangeVar[2]/arrangeVar[1])
           
         }
+        print(varChange)
+        print(diffMean)
         #if the larger slops greater than smaller then we need to fix it
         if ((diffMean < deltaMean)) # | ((varChange > 4) & (diffMean < deltaMean * 4)))
         {
@@ -1457,7 +1471,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
         }
         else
         {
-          if ((varChange > 3) & (diffMean<0.5))
+          if ((varChange > 3) & (diffMean<mergeCutoff))
           {
             message(str_c("cutting dist", median_chrom_signal_filter$chrom[m5]))
             print(fit$parameters$mean)
@@ -1473,6 +1487,9 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
               #transfer larger 1 to cluster 2
               fit$classification[fit$classification==1 & fit$data>fit$parameters$mean[2]]<-2
             }
+            #recompute means
+            fit$parameters$mean[1]<-mean(fit$data[fit$classification==1])
+            fit$parameters$mean[2]<-mean(fit$data[fit$classification==2])
           }
         }
       }
@@ -1480,6 +1497,8 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
     #test uncertainty
     #print(fit$uncertainty)
     fit$classification[fit$uncertainty>uncertaintyCutoff]<-0
+    #print plot
+    print(plot(fit,what="classification")+title(median_chrom_signal_filter$chrom[m5]))
     print(summary(fit))
     #can do adaptations here to check for overfitting
     chrom_clusters[chrom_clusters$Chrom==median_chrom_signal_filter$chrom[m5],2:(2+length(fit$parameters$mean)-1)]<-fit$parameters$mean
@@ -1491,6 +1510,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
   names(cell_assignments)[2:(length(median_chrom_signal_filter$chrom)+1)]<-median_chrom_signal_filter$chrom
   #try to assign groups based on imputed clusters
   chrom_clusters
+  dev.off()
   return(list(cell_assignments,chrom_clusters,med_iqr2))
 }
 
@@ -1704,7 +1724,14 @@ annotateCNV3 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
 graphCNVDistribution <- function(inputMatrix,outputSuffix="_all")
 {
   pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,"_graph.pdf"),width=8,height=6)
-  print(ggplot(inputMatrix %>% gather(Cell,Density,2:(ncol(inputMatrix))),aes(chrom,Density))+geom_violin(scale="width") + theme(axis.text.x=element_text(angle=-90)))
+  print(ggplot(inputMatrix  %>% gather(Cell,Density,ends_with(scCNVCaller$cellSuffix)),aes(chrom,Density))+geom_violin(scale="width",trim=FALSE) +
+          theme(axis.text.x=element_text(angle=-90,vjust = 0.5,hjust = 0, color = "#000000"),
+                axis.text.y=element_text(color="#000000"),
+                axis.line.x.bottom = element_line(colour="#000000"),
+                axis.line.y.left =  element_line(colour="#000000"),
+                panel.background = element_rect(fill="#ffffff"),
+                plot.background = element_rect(color="#ffffff",fill="#ffffff")) +
+          xlab("Segment"))
   dev.off()
 }
 #' graphSmoothCNV
@@ -1848,6 +1875,7 @@ graphSmoothDM <- function(clusterOutputs,origData,dm_outputs,numNN=0,perplex=20)
 getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3)
 {
   #c("E","V")
+  pdf("~/blah.pdf",width=6,height=4)
   inputMatrix<-data.table(inputMatrixIn)
   inputMatrix<-inputMatrix[,cpg:=scCNVCaller$cpg_data$cpg_density]
   inputMatrix<-inputMatrix[,arm:=scCNVCaller$cytoband_data$V4]
@@ -1856,10 +1884,6 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   #inputMatrix<-input
   #%>% mutate(cpg=cpg_data$cpg_density) %>% mutate(arm=cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% select(-arm,-blacklist) #%>%  #cpg+
   #check if raw_medians
-  if ("raw_medians" %in% colnames(inputMatrix))
-  {
-    inputMatrix <- inputMatrix %>% select(-raw_medians)
-  }
   #mutate
   #view(inputMatrix$cpg)
   #inputMatrix<-inputMatrix %>% mutate_at(vars(ends_with("-1")),funs(./(log(cpg,base=2))))
@@ -1891,9 +1915,13 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     # print(IQRv)
     #IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% select(scCNVCaller$cellSuffix),1,quantile,0.3,na.rm=TRUE)
     IQRs<-scale(t(IQRv),center=TRUE,scale=TRUE)
+    if (is.nan(as.vector(IQRs)[1])) {
+      next
+    }
     #expectedSignal<-inputMatrix %>% filter(chrom==targetChrom) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,median) %>% gather(barcode,value) %>% summarise_if(is.numeric,mean)
-    expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,median)][,chrom:=NULL],make.names="pos")[,lapply(.SD,mean)]
-    # print(IQRs)
+    #[,chrom:=NULL]
+    expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,median),by="pos"],make.names="pos")[,lapply(.SD,mean)]
+    #print(as.vector(IQRs))
     cm<-cpt.meanvar(data=as.vector(IQRs),test.stat="Normal", penalty="AIC",method = "PELT",minseglen = minSeg)
     print(plot(cm,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score"))
     cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
@@ -1950,17 +1978,27 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         #posList
         #or max
         #print(head(expectedSignal,n=1))
-        t2d<-inputMatrixK[which(inputMatrixK[,pos %in% posList])][,pos:=NULL][,lapply(.SD,max)] # %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,max) # %>% select(-cpg)
+        t2d<-inputMatrixK[which(inputMatrixK[,pos %in% posList])][,lapply(.SD,max),.SDcols=-c("pos")] # %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,max) # %>% select(-cpg)
         #t2d<-t2 %>% gather(Cell,Value)
-        #  print(t2d)
+       # print(-1*log2(t2d+signalBoost))
+        #print(str(-1*log2(t2d+signalBoost)))
+        t2d_trans<-as.vector(t(-1*log2(t2d+signalBoost)))
+      #  print(as.vector(t(-1*log2(t2d+signalBoost))))
+        #print(str(as.vector(-1*log2(t2d+signalBoost))))
+        print(hist(t2d_trans,main=alterationName))
         # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
         # print(targetChrom)
         # print(posList)
-        fit1<-Mclust(-1*log2(t2d+signalBoost),G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
+        fit1<-Mclust(t2d_trans,G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
         if (length(fit1)==0)
         {
-          message("broken")
-          next()
+          message("broken, retry")
+          fit1<-Mclust(t2d_trans,G=1:2,modelNames=c("V"),initialization = list(noise=TRUE))
+          if (length(fit1)==0)
+          {
+            message("broken 2")
+            next()
+          }
         }
         message(fit1$G)
         #plot(fit1)
@@ -2020,6 +2058,8 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     
   }
   #final cleanup
+  #save images
+  dev.off()
   if (length(alteration_list)>0)
   {
     colnames(dm_per_cell_vals)[2:ncol(dm_per_cell_vals)]<-alteration_list

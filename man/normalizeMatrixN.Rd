@@ -12,7 +12,8 @@ normalizeMatrixN(
   blacklistProp = 0.8,
   priorCount = 1,
   blacklistCutoff = 0,
-  dividingFactor = 1e+06
+  dividingFactor = 1e+06,
+  upperFilterQuantile = 0.95
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ normalizeMatrixN(
 \item{blacklistCutoff}{- minimum signal in a bin to count it as "empty" for the blacklist cutoff}
 
 \item{dividingFactor}{- deprecated}
+
+\item{upperFilterQuantile}{- exclude cells with reads above % percentile (to avoid doublets)}
 }
 \description{
 This function normalizes the input matrix. Do this first.
