@@ -2,17 +2,17 @@
 % Please edit documentation in R/cnv_caller_functions_packaged.R
 \name{annotateLosses}
 \alias{annotateLosses}
-\title{A Cat Function}
+\title{AnnotateLosses}
 \usage{
 annotateLosses(lossFile)
 }
 \arguments{
-\item{love}{Do you love cats? Defaults to TRUE.}
+\item{lossFile}{the file for LOH putative reginos}
 }
 \description{
-This function allows you to express your love of cats.
+This function allows you to annotate loss regions
 }
 \examples{
 cat_function()
 }
-\keyword{cats}
+\keyword{Losses}

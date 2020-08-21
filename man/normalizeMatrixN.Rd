@@ -33,7 +33,7 @@ normalizeMatrixN(
 
 \item{dividingFactor}{- deprecated}
 
-\item{upperFilterQuantile}{- exclude cells with reads above % percentile (to avoid doublets)}
+\item{upperFilterQuantile}{- exclude cells with reads above certain percentile (to avoid doublets)}
 }
 \description{
 This function normalizes the input matrix. Do this first.

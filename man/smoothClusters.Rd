@@ -11,7 +11,8 @@ smoothClusters(
   inputClusterFile,
   inputCNVList,
   inputCNVClusterFile = "",
-  percentPositive = 0.5
+  percentPositive = 0.5,
+  removeEmpty = TRUE
 )
 }
 \arguments{
@@ -21,7 +22,7 @@ smoothClusters(
 
 \item{inputCNVClusterFile}{alternate option to specify external comma delimited file for CNV calls}
 
-\item{percentPositive}{minimum percentage of a cluster to use to call positive for CNV, default is 0.5 (50%)}
+\item{percentPositive}{minimum percentage of a cluster to use to call positive for CNV, default is 0.5 (50 percent)}
 }
 \description{
 smoothClusters
