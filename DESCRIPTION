@@ -16,5 +16,6 @@ Depends:
   tibble (>= 3.0.3),
   gplots (>= 3.0.4),
   dplyr (>= 1.0.0),
-  rtracklayer (>= 1.46.0)
+  rtracklayer (>= 1.46.0),
+  sp (>= 1.4.0)
 RoxygenNote: 7.1.1

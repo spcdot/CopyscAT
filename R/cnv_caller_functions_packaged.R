@@ -218,7 +218,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=500,imputeZeros=F
   cellReads<-transpose(sc_t[,lapply(.SD,sum)],keep.names="Cell")
   pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_signal_distribution.pdf"),width=6,height=4)
   hist(cellReads$V1, breaks=50,main=scCNVCaller$outPrefix,xlab = "Signal")
-  abline(v=quantile(cellReads$V1,0.95),col=c("red"),lty=2)
+  abline(v=quantile(cellReads$V1,upperFilterQuantile),col=c("red"),lty=2)
   dev.off()
   
   readsCells=cellReads[,mean(V1)]
@@ -880,14 +880,14 @@ collapseChrom<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverag
 #' @param minimumChromValue: cutoff to keep a chromosome 
 #' @keywords CNV
 #' @export
-collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverage,logTrans=FALSE,binExpand=1,minimumChromValue=2)
+collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverage,logTrans=FALSE,binExpand=1,minimumChromValue=2,tssEnrich=5,logBase=2,minCPG=1000)
 {
   #remove centromeric bins
   #these are ordered in the same fashion so should be accurate
   #divide signal by cpg density + 1 (To avoid dividing by zero)
   #remove blacklist regions
   # %>% filter(cpg!=0)
-  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% filter(cpg!=0)
+  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% filter(cpg>minCPG)
   if (binExpand>1)
   {
     #collapse bins
@@ -974,7 +974,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
     #5.1e-06, totalcpg 130 for 200k
     #THIS ONE
     #transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL]
-    sckn<-sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL][,lapply(.SD,sum),by="chrom"]
+    sckn<-sckn[,lapply(.SD,"/",1+log(tssEnrich*cpg,base=logBase)),by="chrom"][,cpg:=NULL][,lapply(.SD,summaryFunction),by="chrom"]
     #scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(cpg,base=2)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
     #  select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>% 
     #  mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
@@ -984,7 +984,8 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   else
   {
     #THIS ONE
-    sckn<-sckn[,lapply(.SD,"/",log(1+cpg)),by="chrom"][,cpg:=NULL][,lapply(.SD,sum),by="chrom"]
+    sckn<-sckn[,lapply(.SD,"/",1+tssEnrich*cpg),by="chrom"][,cpg:=NULL][,lapply(.SD,summaryFunction),by="chrom"]
+    #sckn<-sckn[,lapply(.SD,"/",1+tssEnrich*log(cpg,base=logBase)),by="chrom"][,cpg:=NULL][,lapply(.SD,sum),by="chrom"]
     #scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+sqrt(cpg)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
     #  select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>%
     #  mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
@@ -1564,7 +1565,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
       #  }
        # else
        # {
-          if ((varChange > 3) & (diffMean<mergeCutoff))
+          if ((varChange > 2.0) & (diffMean<mergeCutoff))
           {
             message(str_c("cutting dist", median_chrom_signal_filter$chrom[m5]))
             print(fit$parameters$mean)
@@ -1993,7 +1994,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   inputMatrix<-data.table(inputMatrixIn)
   inputMatrix<-inputMatrix[,cpg:=scCNVCaller$cpg_data$cpg_density]
   inputMatrix<-inputMatrix[,arm:=scCNVCaller$cytoband_data$V4]
-  inputMatrix<-inputMatrix[which(inputMatrix[,arm!="cen" & blacklist==0 & cpg!=0])]
+  inputMatrix<-inputMatrix[which(inputMatrix[,arm!="cen" & blacklist==0 & cpg!=0 & chrom!="chrY"])]
   inputMatrix<-inputMatrix[,c("raw_medians","blacklist","cpg","arm"):=NULL]
   #inputMatrix<-input
   #%>% mutate(cpg=cpg_data$cpg_density) %>% mutate(arm=cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% select(-arm,-blacklist) #%>%  #cpg+
@@ -2037,10 +2038,18 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,median),by="pos"],make.names="pos")[,lapply(.SD,mean)]
     #print(as.vector(IQRs))
     cm<-cpt.meanvar(data=as.vector(IQRs),test.stat="Normal", penalty="AIC",method = "PELT",minseglen = minSeg)
-    print(plot(cm,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score"))
     cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
     colnames(cptlist)<-c("Mean","Point")
     cptlist<-as_tibble(cptlist) %>% mutate(Diff = Point - lag(Point))
+    print(plot(cm@data.set,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score"))
+    p1<-as_tibble(cptlist) %>% mutate(Start=lag(Point))
+    p1$Start[1]<-0
+    p1<-p1 %>% select(Start,Mean,Point,Mean)
+    for (a in 1:nrow(p1))
+    {
+      print(segments(p1$Start[a],p1$Mean[a],p1$Point[a],p1$Mean[a],col="red"))
+    }
+    
     print(cptlist)
     if (is.na(cptlist$Diff[1]))
     {
@@ -2462,9 +2471,18 @@ smoothClusters <- function(inputClusterFile,inputCNVList,inputCNVClusterFile="",
   b1<-left_join(inputClusters,inputCNV,by="Barcode")
   #SMOOTH
   b1c<-b1 %>% mutate(clust=inputClusters[,2])
+  specRound <- function(x,boost=0.1)
+  {
+    #  print(x-2)
+    # print(sign(x-2)*round(abs(x-2)+boost))
+    #print(abs(x-2)+boost)
+    return (2+sign(x-2)*round(abs(x-2)+boost,digits=0))
+  }
+  #b1c %>% mutate_at(vars(starts_with("chr")),funs(if_else(is.na(.),2L,.)))
+  #b1c_round<-b1c %>% mutate_at(vars(starts_with("chr")),funs(if_else(is.na(.),2L,.))) %>% group_by(clust) %>% summarise_at(vars(starts_with("chr")),list(mean))  %>% mutate_at(vars(starts_with("chr")),funs(specRound(.,boost=-0.1)))
   b1c_round<-b1c %>% mutate_at(vars(starts_with("chr")),funs(if_else(is.na(.),2,.))) %>% 
     group_by(clust) %>% summarise_at(vars(starts_with("chr")),list(mean))  %>% 
-    mutate_at(vars(starts_with("chr")),funs(round(. + (0.5 - percentPositive),digits=0)))
+    mutate_at(vars(starts_with("chr")),funs(specRound(.,0.5 - percentPositive)))
   if (removeEmpty)
   {
   isMultiple<-function(x){
