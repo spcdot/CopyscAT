@@ -1215,37 +1215,40 @@ collapseChrom3<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAvera
 #' @param inputMatrix - collapsed, normalised matrix
 #' @param minimumSegments  the minimum segments required to keep a cell
 #' @param minDensity  minimum segment density to consider useful (defaults to zero)
+#' @param signalSDcut Number of standard deviations average signal of a cell must be from an average per-cell signal to be considered an outlier (to identify putative doublets; default: 2)
 #' @keywords filter
 #' @keywords CNV
 #' @export
 #' @examples
 #' filterCells(inputMatrix,minimumSegments=41)
-filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0)
+filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0,signalSDcut=2)
 {
   tmp<-inputMatrix
+  initialCells<-ncol(tmp)-1
   cellQuality<-tmp %>% 
-    gather(Cell,Density,2:ncol(tmp)) %>% 
+    gather(Cell,Density,ends_with(scCNVCaller$cellSuffix)) %>% select(chrom,Cell,Density) %>%
     spread(chrom,Density) 
   #print(head(cellQuality))
   cellQuality <- cellQuality %>% mutate(count=rowSums(.[2:ncol(cellQuality)]>minDensity))
   #print(cellQuality$count)
   barcodesPassing <- (cellQuality %>% filter(count>=minimumSegments))$Cell
-  print(str_c(length(barcodesPassing)," barcodes passed quality check"))
+  print(sprintf("%d of %d barcodes passed quality check",length(barcodesPassing),initialCells))
   
   #filter scData_prechrom for quality checks
   tmp <- tmp %>% select(c("chrom",barcodesPassing))
   
   #average total signal per cell
-  aveSignal <- tmp %>% summarize_at(vars(ends_with("-1")),list(sum)) %>% gather(Cell,Average)
-  se_aveSignal <- sd(aveSignal$Average)/sqrt(length(aveSignal$Average))
+  #remove outlier cells
+  aveSignal <- tmp %>% summarize_at(vars(ends_with(scCNVCaller$cellSuffix)),list(sum)) %>% gather(Cell,Average)
+  #se_aveSignal <- sd(aveSignal$Average)/sqrt(length(aveSignal$Average))
   sd_aveSignal <- sd(aveSignal$Average)
   mean_aveSignal <- mean(aveSignal$Average)
-  sd_aveSignal
-  mean_aveSignal - 2*sd_aveSignal
+  #sd_aveSignal
+  #mean_aveSignal - signalSDcut*sd_aveSignal
   #select cells
-  cellsPassingB <- aveSignal %>% filter(between(Average,mean_aveSignal - 2*sd_aveSignal,mean_aveSignal + 2*sd_aveSignal)) %>% select(Cell)
-  print(str_c(length(cellsPassingB$Cell)," barcodes passed quality check 2"))
-  
+  cellsPassingB <- aveSignal %>% filter(between(Average,mean_aveSignal - signalSDcut*sd_aveSignal,mean_aveSignal + signalSDcut*sd_aveSignal)) %>% select(Cell)
+  #print(str_c(length(cellsPassingB$Cell)," barcodes passed quality check 2"))
+  print(sprintf("%d of %d barcodes passed quality check",length(cellsPassingB$Cell),initialCells))
   #filter scData_prechrom for quality checks
   scData_chrom_filtered <- tmp %>% select(c("chrom",cellsPassingB$Cell)) 
   #average total signal per cell
