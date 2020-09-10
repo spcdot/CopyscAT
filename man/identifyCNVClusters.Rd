@@ -19,7 +19,9 @@ identifyCNVClusters(
   fakeCellSD = 0.2,
   uncertaintyCutoff = 1,
   summaryFunction = cutAverage,
-  mergeCutoff = 0.5
+  mergeCutoff = 0.5,
+  summarySuffix = "",
+  shrinky = 0
 )
 }
 \arguments{

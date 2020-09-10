@@ -2,6 +2,7 @@
 
 export(.onLoad)
 export(annotateCNV3)
+export(annotateCNV4)
 export(annotateLosses)
 export(clusterCNV)
 export(collapseChrom3N)

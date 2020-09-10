@@ -10,7 +10,10 @@ collapseChrom3N(
   summaryFunction = cutAverage,
   logTrans = FALSE,
   binExpand = 1,
-  minimumChromValue = 2
+  minimumChromValue = 2,
+  tssEnrich = 5,
+  logBase = 2,
+  minCPG = 1000
 )
 }
 \arguments{
