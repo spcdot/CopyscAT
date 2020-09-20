@@ -64,8 +64,5 @@ dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100)
 write.table(x=dm_candidates,file="samp_dm.csv",quote=FALSE,row.names = FALSE,sep=",")
 
 #assess putative LOH regions
-loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 0.20,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,signalBoost=0.1,lossCutoffCells = 50,lossCutoffReads = 75,quantileLimit=0.2,cpgCutoff=0)
+loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 0.20,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,signalBoost=5,lossCutoffCells = 50,lossCutoffReads = 75,quantileLimit=0.2,cpgCutoff=0)
 write.table(x=loh_regions[[1]],file=str_c("~/samp_loss.csv"),quote=FALSE,row.names = FALSE,sep=",")
-
-library(dplyr)
-loh_regions[[1]] %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==2,-1,.)))
