@@ -1,4 +1,4 @@
-# scATAC_CNV
+# CopyscAT
 Copyright (C) 2020 University of Calgary
 
 This program is free software: you can redistribute it and/or modify
