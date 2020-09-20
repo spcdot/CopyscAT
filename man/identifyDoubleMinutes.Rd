@@ -6,16 +6,29 @@
 \usage{
 identifyDoubleMinutes(
   inputMatrix,
-  minCells = 20,
-  qualityCutoff2 = 40,
+  minCells = 100,
+  qualityCutoff2 = 100,
+  peakCutoff = 5,
+  lossCutoff = -1,
+  doPlots = FALSE,
+  imageNumber = 1000,
   logTrans = FALSE,
   cpgTransform = FALSE,
-  peakCutoff = 3,
-  lossCutoff = -1,
-  doLosses = FALSE,
-  doPlots = TRUE,
-  imageNumber = 250
+  doLosses = FALSE
 )
+}
+\arguments{
+\item{inputMatrix}{normalized input matrix}
+
+\item{minCells}{minimum cells to retain a DM}
+
+\item{qualityCutoff2}{minimum cells to retain DM (filter 2)}
+
+\item{peakCutoff}{Z score minimum to retain a putative DM/amplification}
+
+\item{doPlots}{Plot occasional cells as QC}
+
+\item{imageNumber}{Plot every Nth cell (use in conjunction with doPlots = TRUE)}
 }
 \description{
 Identify double minutes on all chromosomes using changepoint analysis

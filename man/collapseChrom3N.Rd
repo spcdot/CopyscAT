@@ -13,10 +13,16 @@ collapseChrom3N(
   minimumChromValue = 2,
   tssEnrich = 5,
   logBase = 2,
-  minCPG = 1000
+  minCPG = 300
 )
 }
 \arguments{
+\item{tssEnrich}{multiply CpG by weighting factor (default 1)}
+
+\item{logBase}{log base to apply if doing a log weighting of the CpG scaling factor}
+
+\item{minCPG}{keep only regions with at least CpG score of X (300)}
+
 \item{inputMatrix:}{normalised matrix}
 
 \item{summaryFunction:}{function to use to summarise signal}

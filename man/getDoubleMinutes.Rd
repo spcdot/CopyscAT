@@ -10,7 +10,7 @@ getDoubleMinutes(
   doPlot = FALSE,
   penalty_type = "SIC",
   doLosses = FALSE,
-  peakCutoff = 3,
+  peakCutoff = 5,
   lossCutoff = -1
 )
 }

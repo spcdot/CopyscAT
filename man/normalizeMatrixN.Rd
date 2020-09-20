@@ -7,11 +7,11 @@
 normalizeMatrixN(
   inputMatrix,
   logNorm = FALSE,
-  maxZero = 500,
+  maxZero = 2000,
   imputeZeros = FALSE,
   blacklistProp = 0.8,
   priorCount = 1,
-  blacklistCutoff = 0,
+  blacklistCutoff = 100,
   dividingFactor = 1e+06,
   upperFilterQuantile = 0.95
 )

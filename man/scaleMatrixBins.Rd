@@ -2,15 +2,17 @@
 % Please edit documentation in R/cnv_caller_functions_packaged.R
 \name{scaleMatrixBins}
 \alias{scaleMatrixBins}
-\title{A Cat Function}
+\title{Scale matrix bins}
 \usage{
 scaleMatrixBins(inputMatrix, binSizeRatio, inColumn)
 }
 \arguments{
-\item{love}{Do you love cats? Defaults to TRUE.}
+\item{inputMatrix}{matrix of input stuff}
+
+\item{binSizeRatio}{ratio to expand by (2 = double bin size)}
 }
 \description{
-This function allows you to express your love of cats.
+Merges together adjacent windows
 }
 \examples{
 cat_function()

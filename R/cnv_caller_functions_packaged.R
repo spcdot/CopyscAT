@@ -85,22 +85,6 @@ initializeStandards <- function(chromSizeFile,cpgDataFile,cytobandFile)
   
   #initialize cytoband data
   scCNVCaller$cytoband_data<-read.table(cytobandFile,stringsAsFactors = FALSE,header=FALSE)
-  for (n in 1:nrow(scCNVCaller$cytoband_data))
-  {
-    new_weight=0
-    setArm=""
-    split_arm<-str_split(scCNVCaller$cytoband_data$V4[n],fixed(","),simplify=TRUE)
-    
-    #the numbers are heterochromatin DUH
-    setArm=split_arm[[length(split_arm)]]
-    #print(str_sub(setArm,start=1,end=1))
-    #print(cytoband_data$V4[n])
-    scCNVCaller$cytoband_data$V4[n]<-str_sub(setArm,start=1,end=1)
-    if (str_detect(scCNVCaller$cytoband_data$V5[n],"acen"))
-    {
-      scCNVCaller$cytoband_data$V4[n]<-"cen"
-    }
-  }
 }
 #END OF INITIALIZATION BLOCK
 #' readInputTable
@@ -133,71 +117,10 @@ readInputTable<-function(inputFile,sep="\t")
 saveSummaryStats <- function(outputSuffix="_stats")
 {
   summaryStats<-list("meanReadsPerCell" = scCNVCaller$meanReadsPerCell,"startingCellCount" = scCNVCaller$startingCellCount, "cellsPassingFilter" = scCNVCaller$cellsPassingFilter, "blacklistCount" = scCNVCaller$blacklistCount, "finalFilterCells" = scCNVCaller$finalFilterCells)
-  write.table(summaryStats,file=str_c(locPrefix,outPrefix,outputSuffix,".tsv"),quote=FALSE)
+  write.table(summaryStats,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,".tsv"),quote=FALSE)
   return(summaryStats)
 }
 
-#' normalizeMatrix
-#'
-#' This function normalises the input matrix file. Deprecated. Use normalizeMatrixN instead
-#' @keywords cats
-#' @export
-normalizeMatrix <- function(inputMatrix,logNorm=TRUE,maxZero=500,imputeZeros=FALSE,blacklistProp=0.8, priorCount=1,blacklistCutoff=0,dividingFactor=1e6)
-{
-  scData_t<-t(inputMatrix)
-  readsPerCell<- as.data.frame(scData_t) %>% summarise_if(is.numeric,funs(sum)) %>% select(ends_with(scCNVCaller$cellSuffix)) %>% gather(Cell,Fragments,ends_with(scCNVCaller$cellSuffix))
-  print(str_c("Total number of starting cells: ",round(length(readsPerCell$Fragments))," Average reads per cell: ",mean(readsPerCell$Fragments)))
-  scCNVCaller$meanReadsPerCell<<-round(mean(readsPerCell$Fragments))
-  #get low confidence regions
-  nCells<-ncol(scData_t)-1
-  scCNVCaller$startingCellCount<<-nCells
-  #let's say 60% of reads are zeros is blacklist material
-  zero_cols<- inputMatrix %>% summarise_if(is.numeric,funs(sum(.<blacklistCutoff))) %>% gather(Chrom,Value) 
-  print(zero_cols)
-  print(str_c(round(blacklistProp*nCells),"BAH"))
-  #zeros greater than X % of all cells
-  blacklistRegions<-zero_cols %>% filter(Value>=round(blacklistProp*nCells))
-  print(str_c("Blacklist regions: ", length(blacklistRegions$Chrom)))
-  print(head(blacklistRegions$Chrom))
-  scCNVCaller$blacklistCount<<-length(blacklistRegions$Chrom)
-  tmp1<-as.data.frame(scData_t,stringsAsFactors=FALSE)
-  #remove excess zeros (poor quality cells)
-  #`%notin%` <- Negate(`%in%`)
-  zeros<-rownames_to_column(tmp1,var="Chrom") %>% filter(!(Chrom %in% blacklistRegions$Chrom)) %>% summarise_if(is.numeric,funs(sum(.==0))) %>% gather(Cell,Value) %>% mutate(cellPass=(Value<maxZero))
-  scCNVCaller$cellsPassingFilter<<-length(which(zeros$cellPass==TRUE))
-  print(str_c(cellsPassingFilter, " cells passing filter"))
-  #message(blacklistRegions$Chrom)
-  #hist(zeros$Value,breaks=100)
-  #zeros$Cell[zeros$cellPass==TRUE]
-  tmp1 <- tmp1 %>% select(zeros$Cell[zeros$cellPass==TRUE])
-  raw_medians<-apply(tmp1,1,median)
-  raw_medians
-  #tmp1
-  tmp2<-cbind.data.frame(tmp1,raw_medians,stringsAsFactors=FALSE)
-  #impute zeros in cells passing filter
-  if (imputeZeros==TRUE)
-  {
-     tmp3 <- tmp2 %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),~ if_else(. == 0,raw_medians,.)) %>% select(-raw_medians)
-  }
-  else
-  {
-    tmp3 <- tmp2
-  }
-  #now normalize quantiles to account for differences in coverage
-  #scData_n<- normalize.quantiles(scData_t)
-  scData_n<-cpm(tmp3,log =logNorm,prior.count = priorCount)
-  
-  rownames(scData_n)<-rownames(tmp2)
-  colnames(scData_n)<-colnames(tmp3)
-  scData_n
-  head(scData_n)
-  #var_int<-apply(scData_n[1:nrow(scData_n),], 1, var, na.rm=TRUE)
-  #scData_nv<-cbind(scData_n,nvariance=var_int)
-  scData_nc_split <- rownames_to_column(as.data.frame(scData_n),var = "Loc") %>% mutate(blacklist=(Loc %in% blacklistRegions$Chrom)) %>% separate(col=Loc,into=c("chrom","pos"))
-  scData_k<- scData_nc_split %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./ dividingFactor))
-  print(scCNVCaller$cellSuffix)
-  return(scData_k)
-}
 #' normalizeMatrixN
 #'
 #' This function normalizes the input matrix. Do this first.
@@ -211,7 +134,7 @@ normalizeMatrix <- function(inputMatrix,logNorm=TRUE,maxZero=500,imputeZeros=FAL
 #' @param dividingFactor - deprecated
 #' @param upperFilterQuantile - exclude cells with reads above certain percentile (to avoid doublets)
 #' @export
-normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=500,imputeZeros=FALSE,blacklistProp=0.8, priorCount=1,blacklistCutoff=0,dividingFactor=1e6,upperFilterQuantile=0.95)
+normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=FALSE,blacklistProp=0.8, priorCount=1,blacklistCutoff=100,dividingFactor=1e6,upperFilterQuantile=0.95)
 {
   sc_t<-data.table(t(inputMatrix))
   #sc_t
@@ -294,7 +217,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=500,imputeZeros=F
 #' This function allows you to express your love of cats.
 #' @keywords double minutes
 #' @export
-getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SIC",doLosses=FALSE,peakCutoff=3,lossCutoff=-1)
+getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SIC",doLosses=FALSE,peakCutoff=5,lossCutoff=-1)
 {
   medianDensity<-median(inputMatrix[,targetCell])
   if (medianDensity>0){
@@ -316,7 +239,6 @@ getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SI
     cptlist<-as_tibble(cptlist) %>% mutate(Diff = Point - lag(Point))
     #set up list of double minutes; cutoff 0.002
     d_minutes<-cptlist %>% filter(Mean>peakCutoff)
-    d_minutes
     d_losses<-cptlist %>% filter(Mean<lossCutoff)
     #message(nrow(d_minutes))
     if (!doLosses)
@@ -444,8 +366,14 @@ testOverlap <- function(interval.1,interval.2){
 #' @keywords double minutes
 #' @keywords amplification 
 #' @keywords ecDNA
+#' @param inputMatrix normalized input matrix
+#' @param minCells minimum cells to retain a DM
+#' @param qualityCutoff2 minimum cells to retain DM (filter 2)
+#' @param peakCutoff Z score minimum to retain a putative DM/amplification
+#' @param doPlots  Plot occasional cells as QC
+#' @param imageNumber  Plot every Nth cell (use in conjunction with doPlots = TRUE)
 #' @export
-identifyDoubleMinutes<-function(inputMatrix,minCells=20,qualityCutoff2=40,logTrans=FALSE,cpgTransform=FALSE,peakCutoff=3,lossCutoff=-1,doLosses=FALSE,doPlots=TRUE,imageNumber=250)
+identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peakCutoff=5,lossCutoff=-1,doPlots=FALSE,imageNumber=1000,logTrans=FALSE,cpgTransform=FALSE,doLosses=FALSE)
 {
   dm_per_cell<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
 #  print(head(dm_per_cell))
@@ -570,7 +498,7 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=20,qualityCutoff2=40,logTra
     #start one smaller
     
     dm_list_test2=dm_list %>% mutate(newIndex=1)
-    dm_list_test2
+    
     chrom_name=currentChrom
     #now loop through all intervals - if detected greater than one
     if (nrow(dm_list_test2)>1)
@@ -604,22 +532,18 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=20,qualityCutoff2=40,logTra
         }
       }
       #NOTE: still some minor kinks in the overlap function; it works but the intervals aren't coming up perfect
-      dm_list_test2
       #TODO: fudge indices to empty blanks
       tmp_fact<-factor(dm_list_test2$newIndex)
       levels(tmp_fact)<-seq(1,length(levels(tmp_fact)))
       dm_list_test2$newIndex<-as.numeric(levels(tmp_fact)[tmp_fact])
-      dm_list_test2
       #option: can clean up dataframe here and replace NA with FALSE, and then proceed instead of making a giant one up front
       dm_per_cell_temp[is.na(dm_per_cell_temp)]<-FALSE
-      dm_per_cell_temp
       #OK that worked, now to amalgamate cell-wide data
       for (j3 in 2:nrow(dm_list_test2))
       {
         #combine and rename columns appropriately
         dm_per_cell_temp[,dm_list_test2$newIndex[j3]]<-(dm_per_cell_temp[,j3] | dm_per_cell_temp[,dm_list_test2$newIndex[j3]])
       }
-      dm_per_cell_temp
       #now rename colnames
       for (j3 in 2:nrow(dm_list_test2))
       {
@@ -647,7 +571,7 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=20,qualityCutoff2=40,logTra
   }
   #now clean this
   dm_per_cell_clean<-dm_per_cell[,1:(firstRepeatIndex-1)]
-  dm_per_cell_clean %>% summarize_if(is.logical,sum)
+#  dm_per_cell_clean %>% summarize_if(is.logical,sum)
   
   #can cutoff here too (def 50-75)
   secondThreshold=qualityCutoff2
@@ -655,78 +579,6 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=20,qualityCutoff2=40,logTra
   dm_per_cell_clean <- dm_per_cell_clean %>% select(cellName, keepAlterations$Chrom)
   return(dm_per_cell_clean)
 }
-#LOG TRANSFORM
-
-
-
-#dynamic cutoff isn't bad
-
-#CAN DO SECOND ITERATION THROUGH THESE REGIONS and sum signal in these regions then assign (for things that don't quite meet cutoff)
-#' callDMGaussian
-#'
-#' Calls DMs identified using Gaussian decomposition of the regions of interest. Useful but not as sensitive
-#' @param love Do you love cats? Defaults to TRUE.
-#' @keywords cats
-#' @examples
-callDMGaussian<-function(inputMatrix,dm_results)
-{
-  #TODO: 
-  t1<-as.data.frame(x=colnames(dm_results)[2:ncol(dm_results)])
-  colnames(t1)="Alts"
-  t1 <- t1 %>% separate(Alts,c(".c"),into=c("loc1","loc2")) %>% separate(loc1,c("_"),into=c("chrom","start")) %>% mutate(loc2=str_replace(loc2,"hr[0-9]+_",""))
-  
-  #back to this 
-  tmp_scaled<-inputMatrix 
-  tmp_scaled[,3:ncol(tmp_scaled)]=scale(tmp_scaled[,3:ncol(tmp_scaled)],center=TRUE,scale=TRUE)
-  dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(-chrom,-pos)),stringsAsFactors=FALSE)
-  alteration_list=c()
-  for (i in 1:nrow(t1))
-  {
-    #message(i)
-    #process 
-    #message(t1$loc2[i])
-    posList=seq(from=as.numeric(t1$start[i]),to=as.numeric(t1$loc2[i]),by = 1e6)
-    posList<-sprintf(fmt="%d",posList)
-    posList
-    t2<-tmp_scaled %>% filter(chrom==t1$chrom[i],pos %in% posList) %>% summarise_if(is.numeric,sum) # %>% select(-cpg)
-    t2d<-t2 %>% gather(Cell,Value)
-    fit1<-Mclust(t2d$Value,G=1:3,modelNames=c("V"),initialization = list(noise=TRUE))
-    if (fit1$G>2)
-    {
-      #collapse clusters
-      fit1$classification[fit1$data<fit1$parameters$mean[2] & fit1$classification==3]<-2
-      fit1$classification[fit1$data>fit1$parameters$mean[3] & fit1$classification==2]<-3
-      
-      fit1$classification[fit1$classification==2]<-1
-      fit1$classification[fit1$classification==3]<-2
-      alteration_list<-cbind(alteration_list,colnames(dm_results[i+1]))
-      message(fit1$parameters$mean)
-      dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
-      #message(fit1$parameters)
-    }
-    if (fit1$G==2)
-    {
-      #check for and collapse cluster assignments
-      #cells in 2 with val < 1 and vice versa
-      fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
-      fit1$classification[fit1$data>fit1$parameters$mean[2] & fit1$classification==1]<-2
-      alteration_list<-cbind(alteration_list,colnames(dm_results[i+1]))
-      message(fit1$parameters$mean)
-      dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
-    }
-    #plot(fit1)
-    #hist(t2d$Value,breaks=50)
-  }
-  
-  colnames(dm_per_cell_vals)[2:ncol(dm_per_cell_vals)]<-alteration_list
-  dm_per_cell_vals[,2:ncol(dm_per_cell_vals)]=apply(dm_per_cell_vals[2:ncol(dm_per_cell_vals)],2,factor,labels = c("Unclassified","Normal","Amplified"))
-  return(dm_per_cell_vals)
-  
-}
-
-#write.table(dm_per_cell_vals,file="~/4349_amp_v_bin_nolog.csv",quote=FALSE,row.names = FALSE,sep=",")
-
-
 
 #PART 2: CNV CALLING
 #PARAMETERS
@@ -773,10 +625,12 @@ cutAverage <- function(inputVector)
     return(NA)
   }
 }
-#' A Cat Function
+#' Scale matrix bins
 #'
-#' This function allows you to express your love of cats.
-#' @param love Do you love cats? Defaults to TRUE.
+#' Merges together adjacent windows
+#' @param inputMatrix matrix of input stuff
+#' @param binSizeRatio ratio to expand by (2 = double bin size)
+#' @param inColumn
 #' @keywords cats
 #' @examples
 #' cat_function()
@@ -787,89 +641,7 @@ scaleMatrixBins <- function(inputMatrix, binSizeRatio,inColumn)
   
   return(newMatrix)
 }
-#move this elsewhere
 
-
-#old version of code
-
-#' collapseChrom
-#' deprecated
-#' @param love Do you love cats? Defaults to TRUE.
-#' @keywords deprecated
-#' @examples
-collapseChrom<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverage,logTrans=TRUE,binExpand=1,minimumChromValue=2)
-{
-  #remove centromeric bins
-  #these are ordered in the same fashion so should be accurate
-  #divide signal by cpg density + 1 (To avoid dividing by zero)
-  #remove blacklist regions
-  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm))
-  if (binExpand>1)
-  {
-    #collapse bins
-    scData_k_norm <- scaleMatrixBins(scData_k_norm,binSizeRatio = binExpand,"pos")
-    #rename column
-    scData_k_norm <- scData_k_norm %>% rename(pos = pos_b)
-  }
-  #gender determination
-  xy_signal <-scData_k_norm %>% filter(chrom %in% c("chrXq","chrYq")) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
- rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg)
-  diffCutoff=5e-7
-  if (logTrans) {
-    xy_signal <- xy_signal %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) 
-  }
-  else {
-    xy_signal <- xy_signal %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
-    diffCutoff=0.25
-  }
-  XYmedians <- xy_signal %>% gather(Cell,Density,ends_with(scCNVCaller$cellSuffix)) %>% group_by(chrom) %>% summarise(med=median(Density))
-  diffXY<-XYmedians$med[1]-XYmedians$med[2]
-  if (abs(diffXY)<diffCutoff)
-  {
-    scCNVCaller$isMale=TRUE
-  }
-  scData_k_norm <- scData_k_norm %>% mutate(isCentromere=str_detect(chrom,"cen")) %>% filter(isCentromere==FALSE,blacklist==0) %>% select(-blacklist)
-  
-  message(nrow(scData_k_norm))
-  #now append 
-  #summaryFunction
-  total_cpg<-scData_k_norm %>% select(chrom,cpg) %>%
-    group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction))
-  #print(tail(total_cpg))
-  
-  #recompute medians after normalization
-  median_chromosome_density<-scData_k_norm %>%
-    group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) 
-  #can we normalize signal to X chromosome signal?
-  
-  median_chrom_signal<-median_chromosome_density %>% gather(Cell,Value,2:ncol(median_chromosome_density)) %>% select(-Cell) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction))
-  print(median_chrom_signal)
-  median_chrom_signal<-median_chrom_signal %>% filter(!is.na(Value))
-  print(median_chrom_signal)
-  IQR_chrom_signal<-median_chromosome_density %>% filter(chrom %in% median_chrom_signal$chrom) %>% gather(Cell,Value,2:ncol(median_chromosome_density)) %>% select(-Cell) %>% group_by(chrom) %>% summarise_if(is.numeric,list(IQR))
-  print(IQR_chrom_signal)
-  
-  #TODO: cpg of 200 and medianNorm cutoffs only work for 1e6 bins; need to change for others
-  if (logTrans==TRUE)
-  {
-    #5.1e-6 old 
-    #5.1e-06, totalcpg 130 for 200k
-    scData_prechrom<-scData_k_norm %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-    mutate(totalcpg=total_cpg$cpg) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) %>% filter(chrom %in% median_chrom_signal$chrom) %>% 
-    mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue,totalcpg>(200 * binExpand)) 
-    #+log(totalcpg,base=2)
-    #was 200
-  }
-  else
-  {
-    scData_prechrom<-scData_k_norm %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-    mutate(totalcpg=total_cpg$cpg) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) %>% filter(chrom %in% median_chrom_signal$chrom) %>%
-    mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>0,totalcpg>(200* binExpand)) 
-  }
-  
-  #return the appropriate matrices
-  return(scData_prechrom)
-}
 #' collapseChrom3N
 #'
 #' This function summarises signal across chromosomes and normalises using the CpG content
@@ -878,9 +650,12 @@ collapseChrom<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverag
 #' @param logTrans: whether matrix is log-transformed
 #' @param binExpand: whether to merge adjacent bins, if so how many (merges if > 1)
 #' @param minimumChromValue: cutoff to keep a chromosome 
+#' @param tssEnrich multiply CpG by weighting factor (default 1)
+#' @param logBase  log base to apply if doing a log weighting of the CpG scaling factor
+#' @param minCPG keep only regions with at least CpG score of X (300)
 #' @keywords CNV
 #' @export
-collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverage,logTrans=FALSE,binExpand=1,minimumChromValue=2,tssEnrich=5,logBase=2,minCPG=1000)
+collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverage,logTrans=FALSE,binExpand=1,minimumChromValue=2,tssEnrich=5,logBase=2,minCPG=300)
 {
   #remove centromeric bins
   #these are ordered in the same fashion so should be accurate
@@ -927,9 +702,9 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
     #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
     sexCutoff=0.25
   }
-  print(xy_signal)
+  #print(xy_signal)
   diffXY<-xy_signal$chrXq-xy_signal$chrYq
-  print(abs(diffXY))
+ # print(abs(diffXY))
   
   if (abs(diffXY)<sexCutoff)
   {
@@ -939,9 +714,9 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   
   #now to convert rest
   sckn<-data.table(scData_k_norm)
-  print(nrow(sckn))
+  #print(nrow(sckn))
   sckn <- sckn[chromArm!="cen"][blacklist==FALSE]
-  print(nrow(sckn))
+  #print(nrow(sckn))
   #total_cpg <- sckn[,summaryFunction(cpg),by="chrom"]
   #total_cpg
   #setnames(total_cpg,"V1","totalcpg")
@@ -954,14 +729,14 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #head(med_temp)
   transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
   median_chrom_signal<-transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
-  print(median_chrom_signal)
+  #print(median_chrom_signal)
   
   
   #median_chromosome_density[,1:5]
   #]
   #median_chromosome_density<-scData_k_norm %>%
   #  group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) 
-  message(nrow(scData_k_norm))
+  #message(nrow(scData_k_norm))
   #now append 
   #summaryFunction
   
@@ -996,218 +771,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #return the appropriate matrices
   return(as.data.frame(sckn))
 }
-#' collapseChromN
-#'
-#' This function collapses bins into chromosomes.
-#' @param inputMatrix normalised input matrix
-#' @param summaryFunction function to use to collapse chromoseome 
-#' @param logTrans is the data log-transformed - TRUE or FALSE (default: FALSE)
-#' @param binExpand - are we collapsing adjacent bins? >1 = true; integer
-#' @param minimumChromValue - minimum cutoff to keep a chromosome arm as informative
-#' @keywords CNV
-#' @export
-collapseChromN<-function(inputMatrix,summaryFunction=cutAverage,logTrans=FALSE,binExpand=1,minimumChromValue=2)
-{
-  #remove centromeric bins
-  #these are ordered in the same fashion so should be accurate
-  #divide signal by cpg density + 1 (To avoid dividing by zero)
-  #remove blacklist regions
-  # %>% filter(cpg!=0)
-  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% filter(cpg!=0)
-  if (binExpand>1)
-  {
-    #collapse bins
-    scData_k_norm <- scaleMatrixBins(scData_k_norm,binSizeRatio = binExpand,"pos")
-    #rename column
-    scData_k_norm <- scData_k_norm %>% rename(pos = pos_b)
-  }
-  # %>% filter(cpg!=0)
-  #gender determination
-  sckn<-data.table(scData_k_norm)
-  total_cpg<-sckn[,summaryFunction(cpg),by="chrom"]
-  sckn[,c("blacklist","raw_medians","chromArm","cpg","pos"):=NULL]
-  tail(colnames(sckn))
-  setkey(sckn,chrom)
-  sckn<-sckn[c("chrXq","chrYq"),lapply(.SD,quantile,probs=0.8),by="chrom"]
-  nrow(sckn)
-  total_cpg[chrom %in% c("chrXq","chrYq")]
-  sckn[,cpg:=total_cpg[chrom %in% c("chrXq","chrYq")]$V1]
-  #sckn[,print(.SD)]
-  xy_signal<-transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
-  
-  #t(sckn)[2:ncol(sckn),]
-  #xy_signal <- as_tibble(apply(t(sckn)[2:ncol(sckn),],2,as.numeric))
-  #xy_signal
-  #xy_signal <-scData_k_norm %>% filter(chrom %in% c("chrXq","chrYq")) %>% group_by(chrom) %>% summarise_if(is.numeric,list(quantile),probs=0.8) 
-  sexCutoff=5e-7
-  logTrans=FALSE
-  if (logTrans)
-  {
-    xy_signal<-transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
-    
-    #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) 
-  } else
-  {
-    xy_signal<-transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
-    
-    #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
-    sexCutoff=0.25
-  }
-  print(xy_signal)
-  diffXY<-xy_signal$chrXq-xy_signal$chrYq
-  print(abs(diffXY))
-  
-  if (abs(diffXY)<sexCutoff)
-  {
-    scCNVCaller$isMale=TRUE
-  }
-  #top part works awesome
-  
-  #now to convert rest
-  sckn<-data.table(scData_k_norm)
-  print(nrow(sckn))
-  sckn <- sckn[chromArm!="cen"][blacklist==FALSE]
-  print(nrow(sckn))
-  #total_cpg <- sckn[,summaryFunction(cpg),by="chrom"]
-  #total_cpg
-  #setnames(total_cpg,"V1","totalcpg")
-  #remove raw_medians,blacklist,chromArm,cpg
-  sckn<-sckn[,c("blacklist","raw_medians","chromArm","pos"):=NULL]
-  median_chromosome_density<-sckn[1:(nrow(sckn)),lapply(.SD,summaryFunction),by="chrom"]
-  med_temp<-transpose(median_chromosome_density[,c("cpg"):=NULL],make.names="chrom")
-  #head(med_temp)
-  transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
-  median_chrom_signal<-transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
-  print(median_chrom_signal)
-  
-  
-  #median_chromosome_density[,1:5]
-  #]
-  #median_chromosome_density<-scData_k_norm %>%
-  #  group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) 
-  message(nrow(scData_k_norm))
-  #now append 
-  #summaryFunction
-  
-  
-  total_cpg<-sckn[,summaryFunction(cpg),by="chrom"]
-  
-  #TODO: cpg of 200 and medianNorm cutoffs only work for 1e6 bins; need to change for others
-  if (logTrans==TRUE)
-  {
-    #5.1e-6 old 
-    #5.1e-06, totalcpg 130 for 200k
-    #THIS ONE
-    #transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL]
-    sckn<-sckn[,lapply(.SD,sum),by="chrom"][,cpg:=total_cpg$V1][,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"]
-    #sckn<-sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL][,lapply(.SD,sum),by="chrom"]
-    #scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(cpg,base=2)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-    #  select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>% 
-    #  mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
-    #+log(totalcpg,base=2)
-    #was 200
-  }
-  else
-  {
-    #THIS ONE
-    #[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL]
-  
-    sckn<-sckn[,lapply(.SD,sum),by="chrom"][,cpg:=total_cpg$V1][,lapply(.SD,"/",1+cpg),by="chrom"]
-    #scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+sqrt(cpg)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-    #  select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>%
-    #  mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
-  }
-  
-  sckn<-sckn[,medianNorm:=median_chrom_signal$V1]
-  sckn<-sckn[which(sckn[,medianNorm>minimumChromValue])]
-  #return the appropriate matrices
-  return(as.data.frame(sckn))
-}
-#' collapseChrom3
-#'
-#' Deprecated
-#' @param love Do you love cats? Defaults to TRUE.
-#' @keywords cats
-#' @examples
-#' cat_function()
-collapseChrom3<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAverage,logTrans=TRUE,binExpand=1,minimumChromValue=2)
-{
-  #remove centromeric bins
-  #these are ordered in the same fashion so should be accurate
-  #divide signal by cpg density + 1 (To avoid dividing by zero)
-  #remove blacklist regions
-  # %>% filter(cpg!=0)
-  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% filter(cpg!=0)
-  if (binExpand>1)
-  {
-    #collapse bins
-    scData_k_norm <- scaleMatrixBins(scData_k_norm,binSizeRatio = binExpand,"pos")
-    #rename column
-    scData_k_norm <- scData_k_norm %>% rename(pos = pos_b)
-  }
-  # %>% filter(cpg!=0)
-  #gender determination
-  xy_signal <-scData_k_norm %>% filter(chrom %in% c("chrXq","chrYq")) %>% group_by(chrom) %>% summarise_if(is.numeric,list(quantile),probs=0.8) 
-  sexCutoff=5e-7
-  
-  if (logTrans)
-  {
-      xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) 
-  }
-  else
-  {
-    xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
-    sexCutoff=0.25
-  }
-  print(xy_signal)
-  XYmedians <- xy_signal %>% gather(Cell,Density,ends_with(scCNVCaller$cellSuffix)) %>% group_by(chrom) %>% summarise(med=quantile(Density,probs=0.8))
-  diffXY<-XYmedians$med[1]-XYmedians$med[2]
-  print(abs(diffXY))
-  print(XYmedians$med)
-  if (abs(diffXY)<sexCutoff)
-  {
-    scCNVCaller$isMale=TRUE
-  }
-  scData_k_norm <- scData_k_norm %>% mutate(isCentromere=str_detect(chrom,"cen")) %>% filter(isCentromere==FALSE,blacklist==FALSE) %>% select(-blacklist)
-  
-  message(nrow(scData_k_norm))
-  #now append 
-  #summaryFunction
-  total_cpg<-scData_k_norm %>% select(chrom,cpg) %>%
-    group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction))
-  #print(tail(total_cpg))
-  
-  #recompute medians after normalization
-  median_chromosome_density<-scData_k_norm %>%
-    group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) 
-  #can we normalize signal to X chromosome signal?
-  
-  median_chrom_signal<-median_chromosome_density %>% gather(Cell,Value,2:ncol(median_chromosome_density)) %>% select(-Cell) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction))
-  print(median_chrom_signal)
-  median_chrom_signal<-median_chrom_signal %>% filter(!is.na(Value))
-  print(median_chrom_signal)
-  
-  #TODO: cpg of 200 and medianNorm cutoffs only work for 1e6 bins; need to change for others
-  if (logTrans==TRUE)
-  {
-    #5.1e-6 old 
-    #5.1e-06, totalcpg 130 for 200k
-    scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(cpg,base=2)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-      select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>% 
-      mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
-    #+log(totalcpg,base=2)
-    #was 200
-  }
-  else
-  {
-    scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+sqrt(cpg)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-      select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>%
-      mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
-  }
-  
-  #return the appropriate matrices
-  return(scData_prechrom)
-}
+
 #STEP 1:  bin signal per chromosome
 #' filterCells
 #'
@@ -1302,8 +866,8 @@ scaleMatrix <- function(inputMatrix,median_iqr_list,spread=FALSE)
   tmp<-inputMatrix
   median_list<-median_iqr_list[[1]]
   iqr_list<-median_iqr_list[[2]]
-  print(median_list)
-  print(iqr_list)
+ # print(median_list)
+ # print(iqr_list)
   #rep(median(median_list$Value),times=length(median_list$Value))
   tmp[2:ncol(tmp)]=t(scale(t(tmp[2:ncol(tmp)]),center=median_list$Value,scale=iqr_list$Value))
   tmp <- tmp %>% filter(chrom!="chrYp") 
@@ -1318,12 +882,6 @@ scaleMatrix <- function(inputMatrix,median_iqr_list,spread=FALSE)
   }
 }
 
-
-#now release results
-
-#list of chromosomes and cluster means
-
-#make fake cells?
 #' makeFakeCells
 #'
 #' simulate a pseudodiploid control
@@ -1342,11 +900,19 @@ makeFakeCells<-function(x,num=300,sd_fact=0.1){
 #' identifyCNVClusters
 #'
 #' How the sausage is made - uses Gaussian decomposition to analyse a filtered, normalised input matrix and call putative CNVs
-#' @param x (mean of values)
-#' @param num (number of cells)
-#' @param sd_fact (scaling factor for cell SD)
+#' @param inputMatrix
+#' @param median_iqr matrix of medians and IQRs
+#' @param useDummyCells use pseudodiploid control
+#' @param propDummy pseudodiploid control as proportion of normal cells (0.25 = 25 percent)
+#' @param deltaMean minimum difference between clusters
+#' @param subsetSize subset of cells to use for initial computation (useful in large samples)
+#' @param fakeCellSD SD of dummy cells as proportion of range of normal cells (0.10 is default, 0.10-0.20 works best in most cases)
+#' @param summaryFunction summarising function for chromosome arms (default is trimmed average)
+#' @param median_iqr matrix of medians and IQRs
+#' @param median_iqr matrix of medians and IQRs
+#' @param median_iqr matrix of medians and IQRs
 #' @export
-identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,propDummy=0.1, maxClust=4,deltaMean=0.10, minDiff=0.25,deltaBIC2=50, bicMinimum=5,minMix=0.3,subsetSize=500,fakeCellSD=0.2,uncertaintyCutoff=1, summaryFunction=cutAverage,mergeCutoff=0.5,summarySuffix="",shrinky=0)
+identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,propDummy=0.25, deltaMean=0.03, subsetSize=500, fakeCellSD=0.1, summaryFunction=cutAverage, minDiff=0.25,deltaBIC2=1, bicMinimum=5,minMix=0.3,uncertaintyCutoff=0.55, mergeCutoff=3,summarySuffix="",shrinky=0,maxClust=4)
 {
   pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_cnv_summary",summarySuffix,".pdf"),width=8,height=6)
   
@@ -1382,12 +948,12 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
   
   median_chrom_signal_filter <- med_iqr2[[1]] %>% filter(Value>0)
   IQR_chrom_signal_filter <- med_iqr2[[2]] %>% filter(chrom %in% median_chrom_signal_filter$chrom)
-  print(median_chrom_signal_filter)
+  #print(median_chrom_signal_filter)
   #clean up again
   #changed from median
   median_chrom_signal_filter$Value<-quantile(median_chrom_signal_filter$Value,0.5)
   IQR_chrom_signal_filter$Value<-quantile(IQR_chrom_signal_filter$Value,0.25)
-  print(median_chrom_signal_filter)
+  #print(median_chrom_signal_filter)
   print(IQR_chrom_signal_filter)
   #add simulated cells if needed
   
@@ -1416,13 +982,11 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
   #initialize variables for clustering
   cell_ids=unique(scData_chrom_spread$Cell)
   chrom_clusters<-data.frame(Chrom=median_chrom_signal_filter$chrom,V1=0,V2=0,V3=0,V4=0,V5=0,V6=0,stringsAsFactors=FALSE)
-  chrom_clusters
   cell_assignments<-data.frame(Cells=cell_ids,stringsAsFactors = FALSE)
   
   #initialization
   set.seed(0)
   defSubset=sample(1:length(unique(scData_chrom_spread$Cell)),subsetSize)
-  defSubset
   print(ggplot(scData_chrom_spread %>% filter(Cell %in% unique(scData_chrom_spread$Cell)[defSubset]),aes(chrom,Density))+geom_violin(scale="width") + theme(axis.text.x=element_text(angle=-90,hjust = 0,vjust=0.5),
                                                                                           
                                                                                           axis.text.y=element_text(color="#000000"),
@@ -1440,13 +1004,13 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
     #hc doesn't wo
     dens1<-scData_chrom_spread %>% filter(chrom==median_chrom_signal_filter$chrom[m5]) %>% select(Density)
     initParams=list(noise=TRUE,subset=defSubset) #hcPairs=randomPairs(dens1$Density,modelName = "V")) #,noise=sample(1:length(dens1$Density),10)) 
-    message(median_chrom_signal_filter$chrom[m5])
+    #message(median_chrom_signal_filter$chrom[m5])
     #
     fit = Mclust(dens1$Density,G=1:(maxClust-1),model=c("V"), prior = priorControl(shrinkage=shrinky), initialization = initParams) 
     #retype if greater than two components
     if (fit$G>2)
     {
-      print((fit$BIC[fit$G]-fit$BIC[fit$G-1]))
+      #print((fit$BIC[fit$G]-fit$BIC[fit$G-1]))
       if ((fit$BIC[fit$G]-fit$BIC[fit$G-1])<deltaBIC2)
       {
         fit = Mclust(dens1$Density,G=1:2,prior = priorControl(),model="V",initialization = initParams)
@@ -1456,20 +1020,26 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
         range_lists<-list()
         #now do the matching for 3
         overlapping_clusters<-list()
-        for (c1 in 1:(maxClust-1))
+        clust_list1<-c()
+        for (c1 in 1:fit$G)
         {
           range_lists[[c1]]<-range(fit$data[fit$classification==c1])
+          #ignore empty clusters
+          if (length(which(fit$classification==c1))>0)
+          {
+            clust_list1<-append(clust_list1,c1)
+          }
         }
-        for (c1 in 1:(maxClust-1))
+        for (c1 in clust_list1)
         {
-          for (c2 in 1:(maxClust-1))
+          for (c2 in clust_list1)
           {
             if (c1!=c2)
             {
               #print(range_lists[[c1]])
               #print(range_lists[[c2]])
               isOverlap = (range_lists[[c1]][1]<range_lists[[c2]][1]) & (range_lists[[c1]][2]>range_lists[[c2]][2])
-              print(isOverlap)
+              #print(isOverlap)
               if (isOverlap==TRUE)
               {
                 #with c1 being the mama cluster
@@ -1478,19 +1048,19 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
             }
           }
         }
-        print(range_lists)
+        #print(range_lists)
         #process overlaps
-        print(overlapping_clusters)
+        #print(overlapping_clusters)
         if (length(overlapping_clusters)>0)
         {
         for (k0 in 1:length(overlapping_clusters))
         {
           overlap_lists<-overlapping_clusters[[k0]]
-          print("procesisng")
-          print(overlap_lists)
+          #print("procesisng")
+          #print(overlap_lists)
           #test difference in means
           diff_mean<-fit$parameters$mean[overlap_lists[2]]-fit$parameters$mean[overlap_lists[1]]
-          print(diff_mean)
+          #print(diff_mean)
           if (abs(diff_mean) > deltaMean)
           {
             #test quantiles of larger list
@@ -1503,17 +1073,17 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
             else
             {
               message(sprintf("transfer %d into %d",overlap_lists[1],overlap_lists[2]))
-              print(range_lists[[overlap_lists[1]]])
-              print(range_lists[[overlap_lists[2]]])
+             # print(range_lists[[overlap_lists[1]]])
+             # print(range_lists[[overlap_lists[2]]])
               #2 is shifted right of one so right fill the cluster
               fit$classification[fit$classification==overlap_lists[1] & fit$data>fit$parameters$mean[overlap_lists[2]]]<-overlap_lists[2]
               #relabel others
               for (k1 in 1:length(overlapping_clusters))
               {
-                print(sprintf("overlap %d; list %d",overlapping_clusters[[k1]][1],overlap_lists[1]))
+                #print(sprintf("overlap %d; list %d",overlapping_clusters[[k1]][1],overlap_lists[1]))
                 if (overlapping_clusters[[k1]][1]==overlap_lists[1])
                 {
-                  message("relabel")
+                  #message("relabel")
                   overlapping_clusters[[k1]][1]=overlap_lists[2]
                 }
               }
@@ -1551,7 +1121,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
       {
         minProp = arrangedMix[3]
       }
-      print(str_c("deltaBIC",deltaBIC))
+      #print(str_c("deltaBIC",deltaBIC))
       if ((deltaBIC < bicMinimum) | (minProp < propCutoff))
       {
         #message(median_chrom_signal_filter$chrom[m5])
@@ -1571,11 +1141,11 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
           varChange <- (arrangeVar[2]/arrangeVar[1])
           
         }
-        print(varChange)
-        print(diffMean)
-        print("Range")
-        print(range(fit$data[fit$classification==1]))
-        print(range(fit$data[fit$classification==2]))
+       # print(varChange)
+      #  print(diffMean)
+      #  print("Range")
+      #  print(range(fit$data[fit$classification==1]))
+      #  print(range(fit$data[fit$classification==2]))
         #if the larger slops greater than smaller then we need to fix it
        # if ((diffMean < deltaMean)) # | ((varChange > 4) & (diffMean < deltaMean * 4)))
        # {
@@ -1587,8 +1157,8 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
        # {
           if ((varChange > 2.0) & (diffMean<mergeCutoff))
           {
-            message(str_c("cutting dist", median_chrom_signal_filter$chrom[m5]))
-            print(fit$parameters$mean)
+      #      message(str_c("cutting dist", median_chrom_signal_filter$chrom[m5]))
+      #      print(fit$parameters$mean)
             #cut the distribution
             largerSpread <- order(fit$parameters$variance$scale)[2]
             if (largerSpread==2)
@@ -1623,7 +1193,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
   }
   names(cell_assignments)[2:(length(median_chrom_signal_filter$chrom)+1)]<-median_chrom_signal_filter$chrom
   #try to assign groups based on imputed clusters
-  chrom_clusters
+ # chrom_clusters
   dev.off()
   return(list(cell_assignments,chrom_clusters,med_iqr2))
 }
@@ -1648,6 +1218,10 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = FALSE,p
 #' clusterCNVs
 #'
 #' Cleans the putative CNV calls
+#' @param initialResultList output list generated by identifyCNVClusters
+#' @param medianIQR median and IQR list of sample
+#' @param maxClust maximum # of clusters fed into identifyCNVClusters
+#' @param minDiff minimum Z-score difference between clusters
 #' @keywords CNV
 #' @export
 clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
@@ -1667,7 +1241,7 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     activeClusters<-clust_list[2:(2+numClusts-1)]
     #reorder the keys and values
     #reorder keys
-    print(clust_list[2:(2+numClusts-1)])
+    #print(clust_list[2:(2+numClusts-1)])
     clust_list[2:(2+numClusts-1)]<-activeClusters[order(activeClusters)]
   #  print(clust_list[2:(2+numClusts-1)])
     #copy to final list
@@ -1681,7 +1255,7 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     if (hasZero) {
       newOrder<-c(0,newOrder)
     }
-    newOrder
+    #newOrder
     #TODO: what about zeros
     levels(cell_assignments[,m5+1])<-newOrder
     #tmp_fact<-factor(dm_list_test2$newIndex)
@@ -1700,31 +1274,31 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
       else
       {
         minDiffA=min(tmpa$clust_diff)
-        print("min diff")
-        print(minDiffA)
-        print(tmpa)
+        ##print("min diff")
+        ##print(minDiffA)
+        ##print(tmpa)
         #now iterate
         for (j1 in 1:nrow(tmpa))
         {
-          print(tmpa$clust_diff[j1])
+          #print(tmpa$clust_diff[j1])
           if (tmpa$clust_diff[j1]<minDiff)
           {
             #merge these indices
-            print(chrom_clusters_final[m5,])
-            print(str(chrom_clusters_final[m5,]))
-            print(tmpa$init[j1])
-            print(chrom_clusters_final[m5,tmpa$init[j1]])
+            #print(chrom_clusters_final[m5,])
+            #print(str(chrom_clusters_final[m5,]))
+            #print(tmpa$init[j1])
+            #print(chrom_clusters_final[m5,tmpa$init[j1]])
             #weighted average
             number_a<-length(which(cell_assignments[,m5+1]==(tmpa$init[j1]-1)))
             number_b<-length(which(cell_assignments[,m5+1]==(tmpa$init2[j1]-1)))
-            print(number_a)
-            print(number_b)
-            print(range(as.numeric(cell_assignments[,m5+1])))
+           # print(number_a)
+          #  print(number_b)
+          #  print(range(as.numeric(cell_assignments[,m5+1])))
             if ((number_a + number_b)!=0)
             {
               
             new_mean<-(chrom_clusters_final[m5,tmpa$init[j1]]*number_a+chrom_clusters_final[m5,tmpa$init2[j1]]*number_b)/(number_a+number_b)
-            print(new_mean)
+            #print(new_mean)
             chrom_clusters_final[m5,tmpa$init[j1]]<-new_mean
             chrom_clusters_final[m5,tmpa$init2[j1]]<-new_mean
             #       message(str_c(chrom_clusters_final[m5,i1],lastValue,i1,sep=","))
@@ -1760,7 +1334,7 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     cell_assignments[,m5+1]<-as.numeric(levels(cell_assignments[,m5+1])[cell_assignments[,m5+1]])
     #TODO: merge cluster values and medians into a list which we can merge (e.g. chr0_0,0.5))
   }
-  chrom_clusters_final
+ # chrom_clusters_final
   return(list(cell_assignments,chrom_clusters_final))
 }
 #'
@@ -1814,30 +1388,29 @@ annotateCNV3 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
     {
       abn<-min(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]]))
       #first item is normal one
-      print(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]]))
-      print(abn)
-      print(which(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]])==abn))
+      #print(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]]))
+      #print(abn)
+      #print(which(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]])==abn))
       abn_index<-which(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]])==abn)
       #print(order(abs(clusterList[1:possCNV$maxClust[possCNV$Chrom==suspCNV]])))
       #compare to median autosomal value
       #if value is less than autosomal, suspect a loss, otherwise suspect a gain to be abnormal
-      possCNV
-      print(as.numeric(clusterList[abn_index]))
+     # possCNV
+    #  print(as.numeric(clusterList[abn_index]))
       possCNV$normCluster[possCNV$Chrom==suspCNV] =abn_index
-      print(possCNV)
+     # print(possCNV)
     }
     else
     {
       #assume middle cluster is normal
       possCNV$normCluster[possCNV$Chrom==suspCNV] =2
-      print(possCNV)
+     # print(possCNV)
     }
   }
   #merge cell assignments and annotate
   v1<-rownames_to_column(cell_assignments) %>% filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom)
   v2<-left_join(v1,possCNV,by="Chrom") %>% mutate(clust_text=if_else(clust>normCluster,3,if_else(clust<normCluster,1,2))) %>% mutate(clust_text=if_else(clust==0,2,clust_text))
   v2 <- v2 %>% select(rowname,Chrom,clust_text) %>% spread(Chrom,clust_text) %>% arrange(rowname)
-  v2
   if(saveOutput==TRUE)
   {
     write.table(x=v2,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,"_cnv_anno_binary.csv"),quote=FALSE,row.names = FALSE,sep=",")
@@ -1922,7 +1495,7 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
     trimmedCNV<-trimmedCNV[!(trimmedCNV %in% unused$chrom)]
     consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% trimmedCNV) %>% spread(Chrom,clust) %>% arrange(rowname)
   }
-  if(saveOutput==TRUE)
+  if (saveOutput==TRUE)
   {
     write.table(x=consensus_CNV_clusters,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,"_cnv_scores.csv"),quote=FALSE,row.names = FALSE,sep=",")
   }
@@ -1950,126 +1523,6 @@ graphCNVDistribution <- function(inputMatrix,outputSuffix="_all")
           xlab("Segment"))
   dev.off()
 }
-#' graphSmoothCNV
-#'
-#' @keywords output smoothing
-#' @export
-graphSmoothCNV <- function(clusterOutputs, originalGraph,perplex=20,numNN=0){
-  #TODO: cleanup based on geo cluster assignments
-
-  #try plotting without noise cells
-  group_clusts<-clusterOutputs[[1]] %>% filter(str_detect(Cells,"X",negate=TRUE))
-  set.seed(12345)
-  tsn1<-Rtsne(originalGraph,checkDuplicates=FALSE,perplexity=perplex)
-  #TODO: convert from factor
-  #will do this later
-  #https://jmonlong.github.io/Hippocamplus/2018/02/13/tsne-and-clustering/
-  est_k<-sqrt(nrow(clusterOutputs[[1]]))
-  if (numNN!=0)
-  {
-    est_k<-numNN
-  }
-  k = round(est_k)
-  if (k %% 2 ==0) {
-    k = k + 1
-  }
-  #in this case Euclidean is appropriate as we are using the tSNE results
-  knn.norm = get.knn(as.matrix(tsn1$Y), k = k)
-  knn.norm = data.frame(from = rep(1:nrow(knn.norm$nn.index), 
-                                   k), to = as.vector(knn.norm$nn.index), weight = 1/(1 + 
-                                                                                        as.vector(knn.norm$nn.dist)))
-  nw.norm = graph_from_data_frame(knn.norm, directed = FALSE)
-  nw.norm = simplify(nw.norm)
-  lc.norm = cluster_louvain(nw.norm)
-  
-  #candidate_cnvs_clean[[1]]$chr1q
-  print(plot(tsn1$Y, col=as.factor(membership(lc.norm)),asp=1))
-  new_table<-group_clusts %>% mutate(louvain=as.factor(membership(lc.norm)))
-  
-  louvain_means<-new_table %>% group_by(louvain) %>% summarise_at(vars(starts_with("chr")),mean)
-
-  louvain_means[2:ncol(louvain_means)]<-louvain_means[2:ncol(louvain_means)]
-  louvain_means[2:ncol(louvain_means)]<-apply(louvain_means[2:ncol(louvain_means)],2,round)
-  louvain_means
-
-  discretized_cells<-inner_join(new_table %>% select(Cells,louvain),louvain_means)
-  #write only relevant output
- # key_chroms<-discretized_cells %>% summarise_if(is.numeric,IQR) %>% gather(chrom,maxval) %>% filter(IQR>1) %>% select(chrom)
- # print(key_chroms)
-  #discretized_cells<-discretized_cells %>% select(Cells,louvain,key_chroms$chrom)
-  print(discretized_cells)
-  
-  #NOICE
-  write.table(x=discretized_cells  %>% filter(str_detect(Cells,"X",negate=TRUE)),file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_cnv_louvain_nox_50knn.csv"),quote=FALSE,row.names = FALSE,sep=",")
-  #save the discretized CNV file
-  return(list(louvain_means,discretized_cells,tsn1))
-}
-#' graphSmoothDM
-#'
-#' Louvain cluster smooth the DMs
-#' @keywords smoothing
-#' @export
-graphSmoothDM <- function(clusterOutputs,origData,dm_outputs,numNN=0,perplex=20){
-  #TODO: cleanup based on geo cluster assignments
-  #try plotting without noise cells
-  dm_outputs_t<-dm_outputs
-  if (!is.numeric(dm_outputs_t[2]))
-  {
-     dm_outputs_t[2:ncol(dm_outputs)]<-apply(dm_outputs_t[2:ncol(dm_outputs)],2,as.numeric)
-  }
-  print(dm_outputs_t)
-  group_clusts<-clusterOutputs[[1]] %>% filter(str_detect(Cells,"X",negate=TRUE))
-  #group_clusts<-inner_join(group_clusts,dm_outputs_t,by="Cells")
- # group_clusts[is.na(group_clusts)]<-0
-  print(group_clusts)
-  tsn1<-Rtsne(origData,check_duplicates=FALSE,perplexity=perplex)
-  #TODO: convert from factor
-  #will do this later
-  #https://jmonlong.github.io/Hippocamplus/2018/02/13/tsne-and-clustering/
-  
-  est_k<-sqrt(nrow(clusterOutputs[[1]]))
-  if (numNN!=0)
-  {
-    est_k<-numNN
-  }
-  print(est_k)
-  k = round(est_k)
-  if (k %% 2 == 0) {
-    k = k + 1
-  }
-  #in this case Euclidean is appropriate as we are using the tSNE results
-  knn.norm = get.knn(as.matrix(tsn1$Y), k = k)
-  knn.norm = data.frame(from = rep(1:nrow(knn.norm$nn.index), 
-                                   k), to = as.vector(knn.norm$nn.index), weight = 1/(1 + 
-                                                                                        as.vector(knn.norm$nn.dist)))
-  nw.norm = graph_from_data_frame(knn.norm, directed = FALSE)
-  nw.norm = simplify(nw.norm)
-  lc.norm = cluster_louvain(nw.norm)
-  
-  #candidate_cnvs_clean[[1]]$chr1q
-  print(plot(tsn1$Y, col=as.factor(membership(lc.norm)),asp=1))
-  new_table<-group_clusts %>% mutate(louvain=as.factor(membership(lc.norm)))
-  #print(nrow(dm_outputs))
-  new_table<-inner_join(new_table,dm_outputs,by="Cells")
-  print(nrow(new_table))
-  louvain_means<-new_table %>% group_by(louvain) %>% summarise_at(vars(starts_with("chr")),mean)
-  wiggleFactor<-0
-  louvain_means[2:ncol(louvain_means)]<-louvain_means[2:ncol(louvain_means)]+wiggleFactor
-  print(louvain_means)
-  louvain_means[2:ncol(louvain_means)]<-apply(louvain_means[2:ncol(louvain_means)],2,round)
-  print(louvain_means)
-  
-  discretized_cells<-inner_join(new_table %>% select(Cells,louvain),louvain_means)
-  #write only relevant output
-  key_chroms<-discretized_cells %>% summarise_if(is.numeric,max) %>% gather(chrom,maxval) %>% select(chrom)
-  #print(key_chroms)
-  discretized_cells<-discretized_cells %>% select(Cells,louvain,key_chroms$chrom)
-  print(discretized_cells)
-  #NOICE
-  write.table(x=discretized_cells,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_dm_louvain.csv"),quote=FALSE,row.names = FALSE,sep=",")
-  #save the discretized CNV file
-  return(list(louvain_means,discretized_cells))
-}
 #LOSS CNV
 #' getLOHRegions
 #'
@@ -2088,14 +1541,14 @@ graphSmoothDM <- function(clusterOutputs,origData,dm_outputs,numNN=0,perplex=20)
 #' @keywords LOH
 #' @keywords CNV
 #' @export
-getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3)
+getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3,cpgCutoff=0)
 {
   #c("E","V")
-  pdf("~/blah.pdf",width=6,height=4)
+  pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_LOH.pdf"),width=6,height=4)
   inputMatrix<-data.table(inputMatrixIn)
   inputMatrix<-inputMatrix[,cpg:=scCNVCaller$cpg_data$cpg_density]
   inputMatrix<-inputMatrix[,arm:=scCNVCaller$cytoband_data$V4]
-  inputMatrix<-inputMatrix[which(inputMatrix[,arm!="cen" & blacklist==0 & cpg!=0 & chrom!="chrY"])]
+  inputMatrix<-inputMatrix[which(inputMatrix[,arm!="cen" & blacklist==0 & cpg>cpgCutoff & chrom!="chrY"])]
   inputMatrix<-inputMatrix[,c("raw_medians","blacklist","cpg","arm"):=NULL]
   #inputMatrix<-input
   #%>% mutate(cpg=cpg_data$cpg_density) %>% mutate(arm=cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% select(-arm,-blacklist) #%>%  #cpg+
@@ -2151,7 +1604,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
       print(segments(p1$Start[a],p1$Mean[a],p1$Point[a],p1$Mean[a],col="red"))
     }
     
-    print(cptlist)
+    #print(cptlist)
     if (is.na(cptlist$Diff[1]))
     {
       #  message(cptlist$Diff[1])
@@ -2192,6 +1645,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     {
       for (i in 1:nrow(d_lossb))
       {
+        set.seed(12354)
         last_coords[1]<-d_lossb$startCoord[i]
         last_coords[2]<-d_lossb$endCoord[i]
         alterationName<-str_c(targetChrom,sprintf(fmt="%d",last_coords[1]),sprintf(fmt="%d",last_coords[2]),sep="_")
@@ -2209,22 +1663,22 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         t2d_trans<-as.vector(t(-1*log2(t2d+signalBoost)))
       #  print(as.vector(t(-1*log2(t2d+signalBoost))))
         #print(str(as.vector(-1*log2(t2d+signalBoost))))
-        print(hist(t2d_trans,main=alterationName))
+        print(hist(t2d_trans,main=alterationName,breaks = 30))
         # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
         # print(targetChrom)
         # print(posList)
         fit1<-Mclust(t2d_trans,G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
         if (length(fit1)==0)
         {
-          message("broken, retry")
+          #message("broken, retry")
           fit1<-Mclust(t2d_trans,G=1:2,modelNames=c("V"),initialization = list(noise=TRUE))
           if (length(fit1)==0)
           {
-            message("broken 2")
+            #message("broken 2")
             next()
           }
         }
-        message(fit1$G)
+        #message(fit1$G)
         #plot(fit1)
         #if (!is.na(fit1))
         #{
@@ -2232,7 +1686,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         if (fit1$G>2)
         {
           #collapse clusters
-          print(fit1$parameters)
+          print(summary(fit1))
           fit1$classification[fit1$classification==2]<-1
           fit1$classification[fit1$classification==3]<-2
           clust1_mean<-mean(fit1$parameters$mean[1:2])
@@ -2298,7 +1752,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     min_loss[is.na(min_loss)]<-0
     #min_loss$Alteration[min_loss$min>lossCutoffCells]
     #cut appropriately
-    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells])
+    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells]) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==2,-1,.)))
     return(list(dm_per_cell_vals,alteration_list,alteration_delta))
   }
   return(list())
@@ -2334,184 +1788,6 @@ annotateLosses<-function(lossFile)
   write.table(x=coords_final,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_loss_annotations.csv"),quote=FALSE,row.names = FALSE,sep=",")
   return(coords_final)
   
-}
-#' getLOHRegions2
-#'
-#' LOH analysis - alternate approach
-#' @keywords LOH
-#' @export
-getLOHRegions2 <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6)
-{
-  #c("E","V")
-  inputMatrix<-inputMatrixIn %>% mutate(cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(arm=scCNVCaller$cytoband_data$V4) %>% filter(arm!="cen", blacklist==0) %>% select(-arm,-blacklist) #%>%  #cpg+
-  inputMatrix<-inputMatrix %>% filter(chrom!="chrY") 
-  #check if raw_medians
-  if ("raw_medians" %in% colnames(inputMatrix))
-  {
-    inputMatrix <- inputMatrix %>% select(-raw_medians)
-  }
-  #mutate
-  #view(inputMatrix$cpg)
-  #inputMatrix<-inputMatrix %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(log(cpg,base=2))))
-  print(nrow(inputMatrix))
-  chromList<-unique(inputMatrix$chrom)
-  print(chromList)
-  dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(-chrom,-pos,-cpg)),stringsAsFactors=FALSE)
-  alteration_list=c()
-  last_coords=c(0,0)
-  alteration_delta=c()
-  #-0.25
-  #0.00007
-  
-  #1e-4,5e-5
-  #diffThreshold<-0
-  #chromList=c("chr9")
-  #chromList=c("chr5")
-  #may not need IQR, may work with mean/median instead
-  for (targetChrom in chromList)
-  {
-    #message(targetChrom)
-    IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% select(ends_with(scCNVCaller$cellSuffix)),1,quantile,0.4,na.rm=TRUE)
-    IQRs<-scale(IQRv,center=TRUE,scale=TRUE)
-    
-    cm<-cpt.meanvar(data=as.vector(IQRs),test.stat="Normal", penalty="AIC",method = "PELT",minseglen = minSeg)
-    print(plot(cm))
-    cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
-    colnames(cptlist)<-c("Mean","Point")
-    cptlist<-as_tibble(cptlist) %>% mutate(Diff = Point - lag(Point))
-    print(cptlist)
-    if (is.na(cptlist$Diff[1]))
-    {
-      #  message(cptlist$Diff[1])
-      cptlist$Diff[1]=cptlist$Point[1]-1
-      #  message(cptlist$Diff[1])
-    }
-    # print(cptlist)
-    #set up list of double minutes; cutoff 0.002
-    #1.05e-4
-    coord_list<-vector(mode = "list")
-    d_loss<-cptlist %>% filter(Mean<(lossCutoff))
-    d_lossb<-d_loss
-    # print(d_loss)
-    if (nrow(d_loss)>0)
-    {
-      tmp_coords<-inputMatrix  %>% filter(chrom==targetChrom) %>% select(chrom,pos)
-      d_lossb<-d_loss %>% mutate(startCoord=as.numeric(tmp_coords$pos[Point-Diff]),endCoord=as.numeric(tmp_coords$pos[Point]),startChrom=tmp_coords$chrom[Point])
-      # print(d_lossb)
-      #d_lossb<-d_lossb %>% filter((endCoord-startCoord)>=minLength) 
-      tmpb_merged<-d_lossb %>% mutate(touching=(startCoord==lag(endCoord)))
-      tmpb_merged$touching[1]<-FALSE #otherwise NA
-      tmpb_merged <- tmpb_merged %>% mutate(startCoord=if_else(touching==TRUE,lag(startCoord),startCoord),Diff=if_else(touching==TRUE,Diff+lag(Diff),Diff))
-      print(length(which(tmpb_merged$touching==TRUE)))
-      #  print(tmpb_merged)
-      # print(which(tmpb_merged$touching==TRUE)-1)
-      if (length(which(tmpb_merged$touching==TRUE)) > 0)
-      {
-        tmp_merged_final<-tmpb_merged %>% filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% select(-touching)
-        d_lossb<-tmp_merged_final
-      }
-      d_lossb <- d_lossb %>% arrange(startChrom,as.numeric(startCoord))
-      print(d_lossb)
-    }
-    #
-    #coord_list<-append(coord_list,list(c(last_coords[1],last_coords[2])))
-    #change this to loop
-    if (nrow(d_lossb)>=1)
-    {
-      for (i in 1:nrow(d_lossb))
-      {
-        last_coords[1]<-d_lossb$startCoord[i]
-        last_coords[2]<-d_lossb$endCoord[i]
-        alterationName<-str_c(targetChrom,sprintf(fmt="%d",last_coords[1]),sprintf(fmt="%d",last_coords[2]),sep="_")
-        # message(seg_length)
-        
-        posList=seq(from=last_coords[1],to=last_coords[2],by = 1e6)
-        posList<-sprintf(fmt="%d",posList)
-        #posList
-        #or max
-        t2<-inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,sum) # %>% select(-cpg)
-        t2d<-t2 %>% gather(Cell,Value)
-        print(t2d)
-        # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
-        # print(targetChrom)
-        # print(posList)
-        fit1<-Mclust(-1*log2(t2d$Value+signalBoost),G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
-        if (length(fit1)==0)
-        {
-          message("broken")
-          next()
-        }
-        message(fit1$G)
-        #plot(fit1)
-        #if (!is.na(fit1))
-        #{
-        #print(plot(fit1))
-        if (fit1$G>2)
-        {
-          #collapse clusters
-          print(fit1$parameters)
-          fit1$classification[fit1$classification==2]<-1
-          fit1$classification[fit1$classification==3]<-2
-          clust1_mean<-mean(fit1$parameters$mean[1:2])
-          clust2_mean<-fit1$parameters$mean[3]
-          delta_mean = abs(clust2_mean-clust1_mean)
-          #      delta_mean
-          #      message(delta_mean)
-          if (delta_mean>diffThreshold)
-          {
-            alteration_list<-cbind(alteration_list,alterationName)
-            alteration_delta<-cbind(alteration_delta,delta_mean)
-            fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
-            #message(fit1$parameters$mean)
-            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
-          }
-          #      #message(fit1$parameters)
-        }
-        if (fit1$G==2)
-        {
-          #check for and collapse cluster assignments
-          #cells in 2 with val < 1 and vice versa
-          fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
-          fit1$classification[fit1$data>fit1$parameters$mean[2] & fit1$classification==1]<-2
-          delta_mean = abs(fit1$parameters$mean[2]-fit1$parameters$mean[1])
-          message(str_c(delta_mean,"MEAN"))
-          if (delta_mean>diffThreshold)
-          {
-            alteration_list<-cbind(alteration_list,alterationName)
-            alteration_delta<-cbind(alteration_delta,delta_mean)
-            #add delta mean
-            #message(fit1$parameters$mean)
-            #uncertainty less than 0.2
-            fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
-            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
-          }
-          # }
-          #  }
-        }
-      }
-    }
-    #cleanup
-    
-  }
-  #final cleanup
-  if (length(alteration_list)>0)
-  {
-    colnames(dm_per_cell_vals)[2:ncol(dm_per_cell_vals)]<-alteration_list
-    
-    #cutoff for minimum # of cells
-    #count # of cells in each cluster
-    #rowSums(.[2:ncol(cellQuality)]>0)
-    loss_cluster_counts<-dm_per_cell_vals %>% gather(Alteration,Clust,2:ncol(dm_per_cell_vals)) %>% group_by(Alteration) %>% count(Alteration,Clust)
-    print(loss_cluster_counts)
-    min_loss<-loss_cluster_counts %>% spread(Clust,n) %>% select(-'0') %>% mutate(min=min(`1`,`2`))
-    print(min_loss)
-    min_loss[is.na(min_loss)]<-0
-    #min_loss$Alteration[min_loss$min>lossCutoffCells]
-    #cut appropriately
-    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells])
-    return(list(dm_per_cell_vals,alteration_list,alteration_delta))
-  }
-  return(list())
 }
 
 #' readInputTable
@@ -2627,7 +1903,7 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   #a<-tile(chroms,width=1e6)
   #tile the genome
   tiles<-tileGenome(seqlengths(genomeObject),tilewidth=tileWidth,cut.last.tile.in.chrom=T)
-  print(tiles)
+  #print(tiles)
   mySession = browserSession("UCSC")
   genome(mySession) <- genomeText
   tbl.cytobands <- getTable(
@@ -2638,24 +1914,30 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
                    table="cpgIslandExtUnmasked"))
   
   tbl.cytobands
+  # print(tbl.cytobands)
   tbl.cytobands<-GRanges(tbl.cytobands)
   tbl.cpgIslandExt<-GRanges(tbl.cpgIslandExt)
   #now intersect these to generate the reference files
   #http://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/findOverlaps-methods.html
   #MATCHES FOR Cytoband
+  centromeres<-which(mcols(tbl.cytobands)$gieStain=="acen")
+  mcols(tbl.cytobands)$name[centromeres]<-"cen"
   mcols(tbl.cytobands)$gieStain<-NULL
+  print(tbl.cytobands$name)
   tbl.cytobands$name<-as.character(tbl.cytobands$name)
+  #pad names
+  #print(which(tbl.cytobands$name==""))
+  tbl.cytobands$name[which(tbl.cytobands$name=="")]="-"
   tbl.cytobands$name<-str_remove(tbl.cytobands$name,"[0-9.]+")
-  
   matches<-findOverlaps(tbl.cytobands,tiles,select="all",ignore.strand=TRUE)
-  matches
+  #matches
   a3<-tiles[subjectHits(matches)]
-  subjectHits(matches)
-  tiles
-  a3
-  #metadtaa
-  tbl.cytobands[queryHits(matches)]
-  tbl.cytobands
+ # subjectHits(matches)
+  # print(tiles)
+  # print(a3)
+  
+  #print(tbl.cytobands[queryHits(matches)])
+  #tbl.cytobands
   mcols(a3) <- cbind.data.frame(
     mcols(a3),
     mcols(tbl.cytobands[queryHits(matches)]))
@@ -2664,23 +1946,29 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   #https://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/GRanges-class.html
   #ALL CLEAN :)
   a3<-unique(a3)
+  #mcols(empties)<-cbind.data.frame(mcols(empties),name="")
+  #empties
+  
+  #add empties to zero (cpgNum = 0)
+  
+  #a3<-sort.GenomicRanges(append(GRanges(a3),empties))
+  
   #overlap stuff again to remove doubles
   
   #label CPGs
-  head(tbl.cpgIslandExt)
+  #head(tbl.cpgIslandExt)
   tbl.cpgIslandExt<-sort.GenomicRanges(tbl.cpgIslandExt)
   matches<-findOverlaps(tiles,tbl.cpgIslandExt,select="all",ignore.strand=TRUE)
   #sum up the stuff
   #https://www.rdocumentation.org/packages/S4Vectors/versions/0.4.0/topics/Hits-class
   
   b1<-tbl.cpgIslandExt[subjectHits(matches)]
-  b1
   mcols(b1) <- cbind.data.frame(
     mcols(b1),
     ranges(tiles[queryHits(matches)]),
     chrom(tiles[queryHits(matches)]))
-  print(b1)
-  print(tiles[queryHits(matches)])
+  #print(b1)
+  #print(tiles[queryHits(matches)])
   
   
   #NEED TO FIND TILES THAT AREN'T MATCHES
@@ -2695,20 +1983,14 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   #GET EMPTIES
   empties<-tiles[-unique(queryHits(matches))]
   mcols(empties)<-cbind.data.frame(mcols(empties),cpgNum=0)
-  empties
   #add empties to zero (cpgNum = 0)
   
   cpg_densities<-sort.GenomicRanges(append(GRanges(b1t2),empties))
-  cpg_densities
   #TODO: fill with missing zeros
   
   #REMOVE GARBAGE CHROMOSOMES
   cpg_densities<-keepStandardChromosomes(cpg_densities,pruning.mode = "tidy")
   cytoband_densities<-keepStandardChromosomes(a3,pruning.mode="tidy")
-  cytoband_densities
-  #keepSeqlevels(cpg_densities,chrom_sizes$chrom[1:15])
-  as_tibble(cpg_densities)
-  tail(cytoband_densities)
   sort.GenomicRanges(cytoband_densities)
   
   write.table(as_tibble(sort.GenomicRanges(cpg_densities))[,c(1:3,6)],str_c(fileSuffixes,"_cpg_densities.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)

@@ -7,29 +7,37 @@
 identifyCNVClusters(
   inputMatrix,
   median_iqr,
-  useDummyCells = FALSE,
-  propDummy = 0.1,
-  maxClust = 4,
-  deltaMean = 0.1,
+  useDummyCells = TRUE,
+  propDummy = 0.25,
+  deltaMean = 0.03,
+  subsetSize = 500,
+  fakeCellSD = 0.1,
+  summaryFunction = cutAverage,
   minDiff = 0.25,
-  deltaBIC2 = 50,
+  deltaBIC2 = 1,
   bicMinimum = 5,
   minMix = 0.3,
-  subsetSize = 500,
-  fakeCellSD = 0.2,
-  uncertaintyCutoff = 1,
-  summaryFunction = cutAverage,
-  mergeCutoff = 0.5,
+  uncertaintyCutoff = 0.55,
+  mergeCutoff = 3,
   summarySuffix = "",
-  shrinky = 0
+  shrinky = 0,
+  maxClust = 4
 )
 }
 \arguments{
-\item{x}{(mean of values)}
+\item{median_iqr}{matrix of medians and IQRs}
 
-\item{num}{(number of cells)}
+\item{useDummyCells}{use pseudodiploid control}
 
-\item{sd_fact}{(scaling factor for cell SD)}
+\item{propDummy}{pseudodiploid control as proportion of normal cells (0.25 = 25 percent)}
+
+\item{deltaMean}{minimum difference between clusters}
+
+\item{subsetSize}{subset of cells to use for initial computation (useful in large samples)}
+
+\item{fakeCellSD}{SD of dummy cells as proportion of range of normal cells (0.10 is default, 0.10-0.20 works best in most cases)}
+
+\item{summaryFunction}{summarising function for chromosome arms (default is trimmed average)}
 }
 \description{
 How the sausage is made - uses Gaussian decomposition to analyse a filtered, normalised input matrix and call putative CNVs
