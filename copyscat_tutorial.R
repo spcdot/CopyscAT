@@ -30,6 +30,9 @@ initialiseEnvironment(genomeFile="~/hg38_chrom_sizes.tsv",
 
 setOutputFile("~","samp_dataset")
 #step 1 normalize the matrix
+#USING SAMPLE DATA FROM PACKAGE
+#option: if using your own file replace below with the following
+#scData<-readInputTable("myInputFile.tsv")
 scData<-scDataSamp
 scData_k_norm <- normalizeMatrixN(scData,logNorm = FALSE,maxZero=2000,imputeZeros = FALSE,blacklistProp = 0.8,blacklistCutoff=125,dividingFactor=1,upperFilterQuantile = 0.95)
 
