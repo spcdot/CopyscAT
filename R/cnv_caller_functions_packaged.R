@@ -1558,7 +1558,7 @@ graphCNVDistribution <- function(inputMatrix,outputSuffix="_all")
 #' @keywords LOH
 #' @keywords CNV
 #' @export
-getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.7, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3,cpgCutoff=0)
+getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.9, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3,cpgCutoff=0,meanThreshold=4)
 {
   #c("E","V")
   pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_LOH.pdf"),width=6,height=4)
@@ -1575,7 +1575,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   #inputMatrix<-inputMatrix %>% mutate_at(vars(ends_with("-1")),funs(./(log(cpg,base=2))))
   #print(nrow(inputMatrix))
   chromList<-unique(inputMatrix$chrom)
-  #chromList<-c("chr9","chr10")
+  # chromList<-c("chr9","chr10")
   #print(chromList)
   dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
   alteration_list=c()
@@ -1687,7 +1687,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         #print(deadVal)
         t2d<-t(t2d)
         # print(head(t2d))
-        valsToFill<-rnorm(n=length(which(t2d==0)),mean=deadVal/4,sd = 10*signalBoost)
+        valsToFill<-rnorm(n=length(which(t2d==0)),mean=deadVal/meanThreshold,sd = 10*signalBoost)
         # print(valsToFill)
         t2d[which(t2d==0)]<-valsToFill
         #  print(head(t2d,n=10))
@@ -1720,7 +1720,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
           #collapse clusters
           #which diff is bigger
           print(summary(fit1))
-          # plot(fit1,what="classification")
+          plot(fit1,what="classification")
           diff_2=abs(fit1$parameters$mean[3]-fit1$parameters$mean[2])
           diff_1=abs(fit1$parameters$mean[2]-fit1$parameters$mean[1])
           clust1_mean<-mean(fit1$parameters$mean[1:2])
@@ -1740,18 +1740,20 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
           #      print(clust2_mean)
           #deadVal=unlist(quantile(expectedSignalN,0.3))
           dVal2<-unlist(quantile(expectedSignalN,0.6))
+          plot(fit1,what="classification")
+          
           #  print(dVal2)
           signalDiff=2^(-1*clust2_mean)-dVal2
-          #   print(signalDiff)
-          #   print(fit1$parameters$mean)
+          print(signalDiff)
+          print(fit1$parameters$mean)
           
-          #   print(alterationName)
+          print(alterationName)
           delta_mean = clust2_mean-clust1_mean
-          #   print(delta_mean)
+          print(delta_mean)
           #print(clust2_mean-clust1_mean)
           #      delta_mean
           #      message(delta_mean)
-          if (abs(delta_mean)>diffThreshold && (signalDiff<0))
+          if (abs(delta_mean)>diffThreshold && (signalDiff<70))
           {
             alteration_list<-cbind(alteration_list,alterationName)
             alteration_delta<-cbind(alteration_delta,signalDiff)
@@ -1777,7 +1779,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
           signalDiff=2^(-1*fit1$parameters$mean[2])-dVal2
           #print(signalDiff)
           #print(delta_mean)
-          if (abs(delta_mean)>diffThreshold && (signalDiff<0))
+          if (abs(delta_mean)>diffThreshold && (signalDiff<70))
           {
             alteration_list<-cbind(alteration_list,alterationName)
             alteration_delta<-cbind(alteration_delta,signalDiff)
