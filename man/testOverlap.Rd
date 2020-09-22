@@ -2,17 +2,16 @@
 % Please edit documentation in R/cnv_caller_functions_packaged.R
 \name{testOverlap}
 \alias{testOverlap}
-\title{A Cat Function}
+\title{Test overlap}
 \usage{
 testOverlap(interval.1, interval.2)
 }
 \arguments{
-\item{love}{Do you love cats? Defaults to TRUE.}
+\item{interval.1}{(text interval)}
+
+\item{interval.2}{(text interval)}
 }
 \description{
-This function allows you to express your love of cats.
+Tests overlap between two intervals
+Internal use
 }
-\examples{
-cat_function()
-}
-\keyword{cats}

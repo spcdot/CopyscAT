@@ -37,6 +37,17 @@ initialiseEnvironment <- function(genomeFile,cytobandFile,cpgFile,binSize=1e6,mi
   #for 1e6 bins
   scCNVCaller$cytobandFile = cytobandFile
   scCNVCaller$cpgFile = cpgFile
+  
+  #initialize chromosome data
+  scCNVCaller$chrom_sizes <- read.delim(genomeFile,stringsAsFactors=FALSE,header=FALSE)
+  colnames(scCNVCaller$chrom_sizes) <- c("chrom","length")
+  
+  scCNVCaller$cpg_data<-read.table(cpgFile,stringsAsFactors = FALSE,header=FALSE)
+  colnames(scCNVCaller$cpg_data) <- c("chrom","start","end","cpg_density")
+  
+  #initialize cytoband data
+  scCNVCaller$cytoband_data<-read.table(cytobandFile,stringsAsFactors = FALSE,header=FALSE)
+  
   scCNVCaller$binSize=binSize
   scCNVCaller$minFrags=minFrags
   scCNVCaller$cellSuffix=cellSuffix
@@ -61,6 +72,10 @@ initialiseEnvironment <- function(genomeFile,cytobandFile,cpgFile,binSize=1e6,mi
 setOutputFile <- function(outputDir,outputFileSuffix)
 {
   scCNVCaller$locPrefix=outputDir
+  if (str_ends(outputDir,"/",negate=TRUE))
+  {
+    scCNVCaller$locPrefix=str_c(scCNVCaller$locPrefix,"/",sep="")
+  }
   scCNVCaller$outPrefix<-outputFileSuffix
 }
 ##INITIALIZE STANDARD FILES
@@ -159,8 +174,8 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
   sc_lines<-sc_lines[,lapply(.SD,function(x) x<blacklistCutoff)][,lapply(.SD,sum)]
   sc_pos<-transpose(sc_lines,keep.names = "Pos")
   blacklistRegions<-sc_pos[which(sc_pos[,V1>=blacklistPropCutoff]),]$Pos
-  print(length(blacklistRegions))
-  print(nrow(sc_pos))
+  print(sprintf("Blaclist regions: %d",length(blacklistRegions)))
+  print(sprintf("Total bins: %d",nrow(sc_pos)))
   if (length(blacklistRegions)==nrow(sc_pos))
   {
     print("Error: no regions meet cutoff criteria")
@@ -207,7 +222,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
   #var_int<-apply(scData_n[1:nrow(scData_n),], 1, var, na.rm=TRUE)
   #scData_nv<-cbind(scData_n,nvariance=var_int)
   scData_nc_split <- rownames_to_column(as.data.frame(scData_n),var = "Loc") %>% mutate(blacklist=(Loc %in% blacklistRegions)) %>% separate(col=Loc,into=c("chrom","pos"))
-  scData_k<- scData_nc_split %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./ dividingFactor))
+  scData_k<- scData_nc_split %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),list(~ (./ dividingFactor)))
   return(scData_k)
 }
 
@@ -313,13 +328,13 @@ getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SI
     return(NULL)
   }
 }
-#' A Cat Function
+#' Test overlap
 #'
-#' This function allows you to express your love of cats.
-#' @param love Do you love cats? Defaults to TRUE.
-#' @keywords cats
-#' @examples
-#' cat_function()
+#' Tests overlap between two intervals
+#' Internal use
+#' @param interval.1 (text interval)
+#' @param interval.2 (text interval)
+#' @export
 testOverlap <- function(interval.1,interval.2){
   isOverlap=FALSE
   leftEnd="0"
@@ -415,7 +430,7 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
     dm_list=data.frame(dm="null",stringsAsFactors=FALSE)
     if (m>1)
     {
-      rm(dm_per_cell_clean)
+      #rm(dm_per_cell_clean)
       rm(recurrentEvents)
     }
     #initialize temporary matrix
@@ -432,8 +447,10 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
     #dm_index
     plottableCell=FALSE
     plotEachTime=imageNumber
+    pb<-txtProgressBar(min=0,max=nrow(dm_per_cell)-1,style=3)
     for (cellNum in 1:(nrow(dm_per_cell)-1))
     {
+      setTxtProgressBar(pb,cellNum)
     #  print(cellNum)
       # medianDensity<-median(scData_1h[,5])
       # if (medianDensity>0){
@@ -491,6 +508,7 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
         }
       }
     }
+    close(pb)
     names(dm_per_cell_temp)[2:nrow(dm_list)]<-dm_list$dm[2:nrow(dm_list)]
     #dm_per_cell
     #dm_per_cell %>% rename_at(2:(nrow(dm_list)-1),~ dm_list$dm)
@@ -605,7 +623,6 @@ cutAverage <- function(inputVector)
   if (!is.na(quants_tmp[1]))
   {
   #or find median of data within
-  # message(str_c(quants_tmp[1],quants_tmp[2],sep=","))
   boolVal<-inputVector>=quants_tmp[1] & inputVector<=quants_tmp[2]
   #message(boolVal)
   #print(quants_tmp)
@@ -1595,13 +1612,14 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
     colnames(cptlist)<-c("Mean","Point")
     cptlist<-as_tibble(cptlist) %>% mutate(Diff = Point - lag(Point))
-    print(plot(cm@data.set,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score"))
+    plot(cm@data.set,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score")
     p1<-as_tibble(cptlist) %>% mutate(Start=lag(Point))
     p1$Start[1]<-0
     p1<-p1 %>% select(Start,Mean,Point,Mean)
     for (a in 1:nrow(p1))
     {
-      print(segments(p1$Start[a],p1$Mean[a],p1$Point[a],p1$Mean[a],col="red"))
+      #print(segments(p1$Start[a],p1$Mean[a],p1$Point[a],p1$Mean[a],col="red"))
+      segments(p1$Start[a],p1$Mean[a],p1$Point[a],p1$Mean[a],col="red")
     }
     
     #print(cptlist)
@@ -1663,7 +1681,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         t2d_trans<-as.vector(t(-1*log2(t2d+signalBoost)))
       #  print(as.vector(t(-1*log2(t2d+signalBoost))))
         #print(str(as.vector(-1*log2(t2d+signalBoost))))
-        print(hist(t2d_trans,main=alterationName,breaks = 30))
+        hist(t2d_trans,main=alterationName,breaks = 30)
         # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
         # print(targetChrom)
         # print(posList)
@@ -1895,7 +1913,7 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   fileSuffixes=str_c(outputDir,"/",genomeText,"_",tileWidth,sep="")
   print(str_c("Output to ",fileSuffixes,sep=""))
   #chrom sizes - 
-  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn",negate=TRUE)) %>% filter(keeper==TRUE) %>% select(-keeper)
+  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix",negate=TRUE)) %>% filter(keeper==TRUE) %>% select(-keeper)
   chrom_sizes
   chroms<-GRanges(seqnames=genomeObject@seqinfo)
   #https://bioconductor.org/packages/devel/bioc/vignettes/rtracklayer/inst/doc/rtracklayer.pdf
