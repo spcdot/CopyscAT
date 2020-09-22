@@ -1,7 +1,7 @@
 library("devtools")
 #####INITIAL ONE-TIME SETUP #####
-#STEP 1: replace  "~/copyscat" with your working directory
-install("~/copyscat")
+#STEP 1: replace  "~/CopyscAT" with wherever you git cloned the repo to
+install("~/CopyscAT")
 
 #alternate option: devools install-github option
 install_github("spcdot/copyscat")
@@ -60,9 +60,10 @@ final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix 
 #option to compile this code
 library(compiler)
 dmRead<-cmpfun(identifyDoubleMinutes)
+
 dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100)
-write.table(x=dm_candidates,file="samp_dm.csv",quote=FALSE,row.names = FALSE,sep=",")
+write.table(x=dm_candidates,file=str_c(scCNVCaller$locPrefix,"samp_dm.csv"),quote=FALSE,row.names = FALSE,sep=",")
 
 #assess putative LOH regions
-loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 0.20,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,signalBoost=5,lossCutoffCells = 50,lossCutoffReads = 75,quantileLimit=0.2,cpgCutoff=0)
-write.table(x=loh_regions[[1]],file=str_c("~/samp_loss.csv"),quote=FALSE,row.names = FALSE,sep=",")
+loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 0.20,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,signalBoost=5,lossCutoffCells = 150,lossCutoffReads = 75,quantileLimit=0.2,cpgCutoff=0)
+write.table(x=loh_regions[[1]],file=str_c(scCNVCaller$locPrefix,"samp_loss.csv"),quote=FALSE,row.names = FALSE,sep=",")
