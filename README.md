@@ -1,4 +1,15 @@
 # CopyscAT
+Copy number variant inference with single-cell ATAC seq
+
+INTRODUCTION
+CopyscAT is designed to identify large-scale and local alterations in chromosomes without need for a control file. It is currently in early beta - documentation and testing are still works in progress. Development is ongoing with R 4.0.0, so please install within an R 4.0.0 environment.
+
+INSTALLATION INSTRUCTIONS
+To install, please download copyscat_tutorial.R and follow the instructions within.
+To generate fragment matrices, use the process_fragment_file.py script (type python3 process_fragment_file.py for details regarding input parameters)
+
+------------
+
 Copyright (C) 2020 University of Calgary
 
 This program is free software: you can redistribute it and/or modify
