@@ -1575,18 +1575,12 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   #inputMatrix<-inputMatrix %>% mutate_at(vars(ends_with("-1")),funs(./(log(cpg,base=2))))
   #print(nrow(inputMatrix))
   chromList<-unique(inputMatrix$chrom)
+  #chromList<-c("chr9","chr10")
   #print(chromList)
   dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
   alteration_list=c()
   last_coords=c(0,0)
   alteration_delta=c()
-  #-0.25
-  #0.00007
-  
-  #1e-4,5e-5
-  #diffThreshold<-0
-  #chromList=c("chr9")
-  #chromList=c("chr5")
   #may not need IQR, may work with mean/median instead
   for (targetChrom in chromList)
   {
@@ -1676,10 +1670,30 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         #print(head(expectedSignal,n=1))
         t2d<-inputMatrixK[which(inputMatrixK[,pos %in% posList])][,lapply(.SD,max),.SDcols=-c("pos")] # %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,max) # %>% select(-cpg)
         #t2d<-t2 %>% gather(Cell,Value)
-       # print(-1*log2(t2d+signalBoost))
+        # print(-1*log2(t2d+signalBoost))
         #print(str(-1*log2(t2d+signalBoost)))
-        t2d_trans<-as.vector(t(-1*log2(t2d+signalBoost)))
-      #  print(as.vector(t(-1*log2(t2d+signalBoost))))
+        #generate random vals for zeros
+        #        print(expectedSignalN)
+        deadVal=unlist(quantile(expectedSignalN,0.3))
+        #print(deadVal)
+        #print(str(deadVal))
+        # print(head(t2d,n=10))
+        if (length(t2d)==length(which(t2d==0)))
+        {
+          next
+        }
+        #  print(which(t2d==0))
+        #  print(length(which(t2d==0)))
+        #print(deadVal)
+        t2d<-t(t2d)
+        # print(head(t2d))
+        valsToFill<-rnorm(n=length(which(t2d==0)),mean=deadVal/4,sd = 10*signalBoost)
+        # print(valsToFill)
+        t2d[which(t2d==0)]<-valsToFill
+        #  print(head(t2d,n=10))
+        t2d_trans<-as.vector(t(-1*log2(t2d+deadVal)))
+        
+        #  print(as.vector(t(-1*log2(t2d+signalBoost))))
         #print(str(as.vector(-1*log2(t2d+signalBoost))))
         hist(t2d_trans,main=alterationName,breaks = 30)
         # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
@@ -1704,18 +1718,40 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         if (fit1$G>2)
         {
           #collapse clusters
+          #which diff is bigger
           print(summary(fit1))
-          fit1$classification[fit1$classification==2]<-1
-          fit1$classification[fit1$classification==3]<-2
+          # plot(fit1,what="classification")
+          diff_2=abs(fit1$parameters$mean[3]-fit1$parameters$mean[2])
+          diff_1=abs(fit1$parameters$mean[2]-fit1$parameters$mean[1])
           clust1_mean<-mean(fit1$parameters$mean[1:2])
           clust2_mean<-fit1$parameters$mean[3]
+          if (diff_2>diff_1)
+          {
+            fit1$classification[fit1$classification==2]<-1
+            fit1$classification[fit1$classification==3]<-2
+          }
+          else
+          {
+            #fit1$classification[fit1$classification==2]<-1
+            fit1$classification[fit1$classification==3]<-2
+            clust1_mean<-fit1$parameters$mean[1]
+            clust2_mean<-mean(fit1$parameters$mean[2:3])
+          }
           #      print(clust2_mean)
-          signalDiff=2^(-1*clust2_mean)-expectedSignalN-signalBoost
+          #deadVal=unlist(quantile(expectedSignalN,0.3))
+          dVal2<-unlist(quantile(expectedSignalN,0.6))
+          #  print(dVal2)
+          signalDiff=2^(-1*clust2_mean)-dVal2
+          #   print(signalDiff)
+          #   print(fit1$parameters$mean)
+          
+          #   print(alterationName)
           delta_mean = clust2_mean-clust1_mean
+          #   print(delta_mean)
           #print(clust2_mean-clust1_mean)
           #      delta_mean
           #      message(delta_mean)
-          if (abs(delta_mean)>diffThreshold && (signalDiff<(-1*lossCutoffReads)))
+          if (abs(delta_mean)>diffThreshold && (signalDiff<0))
           {
             alteration_list<-cbind(alteration_list,alterationName)
             alteration_delta<-cbind(alteration_delta,signalDiff)
@@ -1727,6 +1763,8 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         }
         if (fit1$G==2)
         {
+          #plot(fit1,what="classification")
+          
           #check for and collapse cluster assignments
           #cells in 2 with val < 1 and vice versa
           fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
@@ -1734,8 +1772,12 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
           delta_mean = fit1$parameters$mean[2]-fit1$parameters$mean[1]
           #message(str_c(delta_mean,"MEAN"))
           #       print(delta_mean)
-          signalDiff=2^(-1*fit1$parameters$mean[2])-expectedSignalN-signalBoost
-          if (abs(delta_mean)>diffThreshold && (signalDiff<(-1*lossCutoffReads)))
+          dVal2<-unlist(quantile(expectedSignalN,0.6))
+          
+          signalDiff=2^(-1*fit1$parameters$mean[2])-dVal2
+          #print(signalDiff)
+          #print(delta_mean)
+          if (abs(delta_mean)>diffThreshold && (signalDiff<0))
           {
             alteration_list<-cbind(alteration_list,alterationName)
             alteration_delta<-cbind(alteration_delta,signalDiff)
