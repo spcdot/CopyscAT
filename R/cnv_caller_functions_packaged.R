@@ -1957,15 +1957,18 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   fileSuffixes=str_c(outputDir,"/",genomeText,"_",tileWidth,sep="")
   print(str_c("Output to ",fileSuffixes,sep=""))
   #chrom sizes - 
-  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix",negate=TRUE)) %>% filter(keeper==TRUE) %>% select(-keeper)
+  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix|_|MT",negate=TRUE)) %>% filter(keeper==TRUE) %>% select(-keeper)
   chrom_sizes
   chroms<-GRanges(seqnames=genomeObject@seqinfo)
+  #chroms<-chroms[which(chroms@seqnames %in% chrom_sizes$chrom)]
+  chroms<-chroms[which(chroms@seqnames %in% chrom_sizes$chrom)]
+  #print(chroms)
   #https://bioconductor.org/packages/devel/bioc/vignettes/rtracklayer/inst/doc/rtracklayer.pdf
-  #print(chrom_sizes)
+  #print(seqlengths(genomeObject))
   #a<-tile(chroms,width=1e6)
   #tile the genome
-  tiles<-tileGenome(seqlengths(genomeObject),tilewidth=tileWidth,cut.last.tile.in.chrom=T)
-  #print(tiles)
+  tiles<-tileGenome(seqlengths(chroms),tilewidth=tileWidth,cut.last.tile.in.chrom=T)
+  print(tiles)
   mySession = browserSession("UCSC")
   genome(mySession) <- genomeText
   tbl.cytobands <- getTable(
@@ -2007,9 +2010,12 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   #label Cytobands
   #https://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/GRanges-class.html
   #ALL CLEAN :)
-  a3<-unique(a3)
-  #mcols(empties)<-cbind.data.frame(mcols(empties),name="")
+ #mcols(empties)<-cbind.data.frame(mcols(empties),name="")
   #empties
+  empties<-tiles[-unique(queryHits(matches))]
+  mcols(empties)<-cbind.data.frame(mcols(empties),name="p")
+  a3<-sort.GenomicRanges(append(GRanges(a3),empties))
+  a3<-unique(a3)
   
   #add empties to zero (cpgNum = 0)
   
