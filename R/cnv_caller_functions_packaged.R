@@ -694,10 +694,16 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   sckn[,c("blacklist","raw_medians","chromArm","cpg","pos"):=NULL]
   tail(colnames(sckn))
   setkey(sckn,chrom)
-  sckn<-sckn[c("chrXq","chrYq"),lapply(.SD,quantile,probs=0.8),by="chrom"]
+  chromXName="chrXq"
+  chromYName="chrYq"
+  x_tmp<-(tail(scCNVCaller$cytoband_data[which(scCNVCaller$cytoband_data$V1=="chrX"),c(1,4)],n=1))
+  chromXName<-paste(x_tmp$V1,x_tmp$V4,sep="")
+  y_tmp<-(tail(scCNVCaller$cytoband_data[which(scCNVCaller$cytoband_data$V1=="chrY"),c(1,4)],n=1))
+  chromYName<-paste(y_tmp$V1,y_tmp$V4,sep="")
+  sckn<-sckn[c(chromXName,chromYName),lapply(.SD,quantile,probs=0.8),by="chrom"]
   nrow(sckn)
-  total_cpg[chrom %in% c("chrXq","chrYq")]
-  sckn[,cpg:=total_cpg[chrom %in% c("chrXq","chrYq")]$V1]
+  total_cpg[chrom %in% c(chromXName,chromYName)]
+  sckn[,cpg:=total_cpg[chrom %in% c(chromXName,chromYName)]$V1]
   #sckn[,print(.SD)]
   xy_signal<-transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
   
