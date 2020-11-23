@@ -1479,7 +1479,7 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
   chrom_clusters_final<-chrom_clusters_final %>% gather("cluster","zscore",starts_with("V")) %>% mutate(cluster=str_remove(cluster,"V")) 
   #print(chrom_clusters_final)
   #print(which(is.nan(chrom_clusters_final$zscore)))
-  chrom_clusters_final$zscore<-sapply(sapply(chrom_clusters_final$zscore-shift_val,pnorm),qnorm,2,sdCNV)
+  chrom_clusters_final$zscore<-sapply(sapply(chrom_clusters_final$zscore-shift_val,pnorm,log.p=TRUE),qnorm,2,sdCNV,log.p=TRUE)
   #replace each column
   #print(chrom_clusters_final)
   trimmedCNV<-vector()
@@ -1491,6 +1491,9 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
     #print(head(cell_assignments[chrom]))
     #print(as.character(factor(cell_assignments[,chrom],levels=seq(from=0,to=6),labels = c("2",zscores$zscore))))
     cell_assignments[,chrom]<-as.numeric(as.character(factor(cell_assignments[,chrom],levels=seq(from=0,to=6),labels = c("2",zscores$zscore))))
+   # print(zscores)
+  #  print(chrom)
+  #  print(range(zscores))
     if (diff(range(zscores))>=thresholdVal)
     {
     #  print(chrom)
