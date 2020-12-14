@@ -38,20 +38,20 @@ scData_k_norm <- normalizeMatrixN(scData,logNorm = FALSE,maxZero=2000,imputeZero
 
 #collapse into chromosome arm level
 summaryFunction<-cutAverage
-
-scData_collapse<-collapseChrom3N(scData_k_norm,summaryFunction=summaryFunction,binExpand = 1,minimumChromValue = 100,logTrans = FALSE,tssEnrich = 1,logBase=2,minCPG=300) 
+#powval 0.7 - 0.75
+scData_collapse<-collapseChrom3N(scData_k_norm,summaryFunction=summaryFunction,binExpand = 1,minimumChromValue = 100,logTrans = FALSE,tssEnrich = 1,logBase=2,minCPG=300,powVal=0.73) 
 #apply additional filters
-scData_collapse<-filterCells(scData_collapse,minimumSegments = 40,minDensity = 0.01)
+scData_collapse<-filterCells(scData_collapse,minimumSegments = 40,minDensity = 0.1)
 
 #show unscaled chromosome list
-graphCNVDistribution(scData_collapse,outputSuffix = "test_violins")
+graphCNVDistribution(scData_collapse,outputSuffix = "test_violinsn2")
 
 #compute centers
 median_iqr <- computeCenters(scData_collapse,summaryFunction=summaryFunction)
 #identify chromosome-level amplifications
-candidate_cnvs<-identifyCNVClusters(scData_collapse,median_iqr,useDummyCells = TRUE,propDummy=0.25,minMix=0.01,deltaMean = 0.03,deltaBIC2 = 1, subsetSize=500,fakeCellSD = 0.10, uncertaintyCutoff = 0.55,summaryFunction=summaryFunction,maxClust = 4,mergeCutoff = 3)
+candidate_cnvs<-identifyCNVClusters(scData_collapse,median_iqr,useDummyCells = TRUE,propDummy=0.25,minMix=0.01,deltaMean = 0.03,deltaBIC2 = 0.25,bicMinimum = 0.1, subsetSize=600,fakeCellSD = 0.08, uncertaintyCutoff = 0.55,summaryFunction=summaryFunction,maxClust = 4,mergeCutoff = 3,IQRCutoff= 0.2,medianQuantileCutoff = 0.4)
 #cleanup step
-candidate_cnvs_clean<-clusterCNV(initialResultList = candidate_cnvs,medianIQR = candidate_cnvs[[3]],minDiff=1.0) #= 1.5)
+candidate_cnvs_clean<-clusterCNV(initialResultList = candidate_cnvs,medianIQR = candidate_cnvs[[3]],minDiff=1.5) #= 1.5)
 #final results and annotation
 final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix = "clean_cnv",sdCNV = 0.5,filterResults=TRUE,filterRange=0.8)
 
