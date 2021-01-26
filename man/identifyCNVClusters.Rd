@@ -14,14 +14,16 @@ identifyCNVClusters(
   fakeCellSD = 0.1,
   summaryFunction = cutAverage,
   minDiff = 0.25,
-  deltaBIC2 = 1,
-  bicMinimum = 5,
+  deltaBIC2 = 0.25,
+  bicMinimum = 0.1,
   minMix = 0.3,
   uncertaintyCutoff = 0.55,
   mergeCutoff = 3,
   summarySuffix = "",
   shrinky = 0,
-  maxClust = 4
+  maxClust = 4,
+  IQRCutoff = 0.25,
+  medianQuantileCutoff = 0.3
 )
 }
 \arguments{

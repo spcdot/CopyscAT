@@ -8,7 +8,7 @@ getLOHRegions(
   inputMatrixIn,
   lossCutoff = (-0.25),
   uncertaintyCutLoss = 0.5,
-  diffThreshold = 0.7,
+  diffThreshold = 0.9,
   minLength = 3e+06,
   minSeg = 3,
   lossCutoffCells = 100,
@@ -16,7 +16,8 @@ getLOHRegions(
   signalBoost = 1e-06,
   lossCutoffReads = 100,
   quantileLimit = 0.3,
-  cpgCutoff = 0
+  cpgCutoff = 0,
+  meanThreshold = 4
 )
 }
 \arguments{

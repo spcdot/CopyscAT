@@ -11,7 +11,8 @@ annotateCNV4(
   outputSuffix = "_1",
   sdCNV = 0.6,
   filterResults = TRUE,
-  filterRange = 0.8
+  filterRange = 0.8,
+  minAlteredCells = 40
 )
 }
 \arguments{
@@ -24,6 +25,12 @@ annotateCNV4(
 \item{outputSuffix}{output suffix to save files}
 
 \item{sdCNV}{sd for CNV copy number estimation}
+
+\item{filterResults}{filter results to remove likely unaltered chromosomes}
+
+\item{filterRange}{copy number range minimum}
+
+\item{minAlteredCells}{filtering parameter - remove all alterations with a smallest group less than X cells (default is 40)}
 }
 \description{
 Annotates the filtered CNV calls and saves the results, and estimates absolute copy numbers

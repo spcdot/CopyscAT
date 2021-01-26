@@ -13,7 +13,8 @@ collapseChrom3N(
   minimumChromValue = 2,
   tssEnrich = 5,
   logBase = 2,
-  minCPG = 300
+  minCPG = 300,
+  powVal = 0.73
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ collapseChrom3N(
 \item{logBase}{log base to apply if doing a log weighting of the CpG scaling factor}
 
 \item{minCPG}{keep only regions with at least CpG score of X (300)}
+
+\item{powVal}{scaling factor adjustment (cpg^powVal, 0.7-0.75 works well for hg38 and hg19)}
 
 \item{inputMatrix:}{normalised matrix}
 
