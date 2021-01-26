@@ -1,6 +1,7 @@
 Package: CopyscAT
 Version: 0.2
 Depends:
+    biomaRt (>= 2.42.1),
     Rtsne (>= 0.15),
     FNN (>= 1.1.3),
     igraph (>= 1.2.5),

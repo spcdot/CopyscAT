@@ -4,6 +4,7 @@ library("devtools")
 install("~/CopyscAT")
 
 #alternate option: devools install-github option
+Sys.setenv("R_REMOTES_NO_ERRORS_FROM_WARNINGS" = "true")
 install_github("spcdot/copyscat")
 
 #load the package
