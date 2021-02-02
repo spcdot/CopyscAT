@@ -62,9 +62,31 @@ final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix 
 library(compiler)
 dmRead<-cmpfun(identifyDoubleMinutes)
 
-dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100)
+dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100,minThreshold = 4)
 write.table(x=dm_candidates,file=str_c(scCNVCaller$locPrefix,"samp_dm.csv"),quote=FALSE,row.names = FALSE,sep=",")
-
+?seq
+paste("X",seq(from=1,to=50),"-1",sep="")
 #assess putative LOH regions
-loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 0.20,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,signalBoost=5,lossCutoffCells = 150,lossCutoffReads = 75,quantileLimit=0.2,cpgCutoff=0)
+t1<-rnorm(n=50,mean=300,sd = 0.1*300)
+t1<-data.frame(t1)
+rownames(t1)<-paste("X",seq(from=1,to=50),"-1",sep="")
+as.matrix(t1)
+#400
+#TODO: slice the regions
+sliceList<-function(listClassification,listMeans,listValues)
+{
+  #reassign items
+  #assume there are only two
+  #recompute means
+  mean1<-mean(listValues[listClassification==1])
+  mean2<-mean(listValues[listClassification==2])
+  outliers1<-which(listValues[listClassification==1]>mean2)
+  outliers2<-which(listValues[listClassification==2]<mean1)
+  #reassign outliers
+  listClassification[outliers1]<-2
+  listClassification[outliers2]<-1
+  return(listClassification)
+}
+scCNVCaller$locPrefix<-"4250"
+loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 3,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,lossCutoffCells = 200,quantileLimit=0.2,cpgCutoff=100,dummyQuantile=0.6,dummyPercentile=0.4,dummySd=0.1)
 write.table(x=loh_regions[[1]],file=str_c(scCNVCaller$locPrefix,"samp_loss.csv"),quote=FALSE,row.names = FALSE,sep=",")

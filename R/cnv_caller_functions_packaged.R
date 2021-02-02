@@ -231,8 +231,9 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
 #'
 #' This function allows you to express your love of cats.
 #' @keywords double minutes
+#' @param minThreshold set threshold of Z score to run changepoint analysis; higher value = less sensitive but faster
 #' @export
-getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SIC",doLosses=FALSE,peakCutoff=5,lossCutoff=-1)
+getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SIC",doLosses=FALSE,peakCutoff=5,lossCutoff=-1,minThreshold=4)
 {
   medianDensity<-median(inputMatrix[,targetCell])
   if (medianDensity>0){
@@ -241,6 +242,9 @@ getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SI
     #consider using IQR Here
     tmp<-as.numeric(scale(tmp,center=median(tmp),scale=IQR(tmp)),stringsAsFactors=FALSE)
     #adjusted minseglength 
+    #print(max(tmp))
+    if (max(tmp)>minThreshold)
+    {
     cm<-cpt.meanvar(data=tmp,test.stat="Normal", penalty=penalty_type,method = "PELT")
     #,minseglen = 3)  
     #TODO: need to document double minutes in some way (e.g. presence of each per cell) - this works
@@ -285,9 +289,6 @@ getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SI
         }
         return(d_min_coords)
       }
-      else {
-        return(NULL)
-      }
     }
     else {
       #look for losses
@@ -322,6 +323,10 @@ getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SI
         
         return(d_loss_coords)
       } 
+    }
+    }
+    else  {
+      return(NULL)
     }
   }
   else {
@@ -387,8 +392,9 @@ testOverlap <- function(interval.1,interval.2){
 #' @param peakCutoff Z score minimum to retain a putative DM/amplification
 #' @param doPlots  Plot occasional cells as QC
 #' @param imageNumber  Plot every Nth cell (use in conjunction with doPlots = TRUE)
+#' @param minThreshold
 #' @export
-identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peakCutoff=5,lossCutoff=-1,doPlots=FALSE,imageNumber=1000,logTrans=FALSE,cpgTransform=FALSE,doLosses=FALSE)
+identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peakCutoff=5,lossCutoff=-1,doPlots=FALSE,imageNumber=1000,logTrans=FALSE,cpgTransform=FALSE,doLosses=FALSE,minThreshold=4)
 {
   dm_per_cell<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
 #  print(head(dm_per_cell))
@@ -470,13 +476,13 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
       {
         #print(plottableCell)
         pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_cell",cellNum,"_",currentChrom,".pdf"),width=6,height=4)
-        temp_dm<-getDoubleMinutes(scData_1h,cellNum,doLosses=doLosses,peakCutoff = peakCutoff,lossCutoff = lossCutoff,doPlot=TRUE)
+        temp_dm<-getDoubleMinutes(scData_1h,cellNum,doLosses=doLosses,peakCutoff = peakCutoff,lossCutoff = lossCutoff,doPlot=TRUE,minThreshold=minThreshold)
         dev.off()
         plottableCell=FALSE
       }
       else
       {
-        temp_dm<-getDoubleMinutes(scData_1h,cellNum,doLosses=doLosses,peakCutoff = peakCutoff,lossCutoff = lossCutoff,doPlot=FALSE)
+        temp_dm<-getDoubleMinutes(scData_1h,cellNum,doLosses=doLosses,peakCutoff = peakCutoff,lossCutoff = lossCutoff,doPlot=FALSE,minThreshold=minThreshold)
       }
       
       if (!is.null(temp_dm))
@@ -1593,7 +1599,7 @@ graphCNVDistribution <- function(inputMatrix,outputSuffix="_all")
 #' @keywords LOH
 #' @keywords CNV
 #' @export
-getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.9, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,signalBoost=1e-6,lossCutoffReads=100,quantileLimit=0.3,cpgCutoff=0,meanThreshold=4)
+getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0.5, diffThreshold=0.9, minLength=3e6, minSeg=3, lossCutoffCells=100,targetFun=IQR,quantileLimit=0.3,cpgCutoff=0,meanThreshold=4,dummyQuantile=0.5,dummyPercentile=0.2,dummySd=0.2)
 {
   #c("E","V")
   pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_LOH.pdf"),width=6,height=4)
@@ -1616,6 +1622,29 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   alteration_list=c()
   last_coords=c(0,0)
   alteration_delta=c()
+  sliceList<-function(fit)
+  {
+    #reassign items
+    #assume there are only two
+    #recompute means
+    largerSpread <- order(fit$parameters$variance$scale)[2]
+    if (largerSpread==2)
+    {
+      #transfer small 2 to cluster 1
+      fit$classification[fit$classification==2 & fit$data<fit$parameters$mean[1]]<-1
+    }
+    else
+    {
+      #transfer larger 1 to cluster 2
+      fit$classification[fit$classification==1 & fit$data>fit$parameters$mean[2]]<-2
+    }
+    #recompute means
+     mean1a<-mean(fit$data[fit$classification==1])
+     mean2b<-mean(fit$data[fit$classification==2])
+    
+    
+    return(fit$classification)
+  }
   #may not need IQR, may work with mean/median instead
   for (targetChrom in chromList)
   {
@@ -1635,7 +1664,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     }
     #expectedSignal<-inputMatrix %>% filter(chrom==targetChrom) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,median) %>% gather(barcode,value) %>% summarise_if(is.numeric,mean)
     #[,chrom:=NULL]
-    expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,median),by="pos"],make.names="pos")[,lapply(.SD,mean)]
+    expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,max),by="pos"],make.names="pos")[,lapply(.SD,mean)]
     #print(as.vector(IQRs))
     cm<-cpt.meanvar(data=as.vector(IQRs),test.stat="Normal", penalty="AIC",method = "PELT",minseglen = minSeg)
     cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
@@ -1709,7 +1738,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         #print(str(-1*log2(t2d+signalBoost)))
         #generate random vals for zeros
         #        print(expectedSignalN)
-        deadVal=unlist(quantile(expectedSignalN,0.3))
+        deadVal=unlist(quantile(expectedSignalN,dummyQuantile))
         #print(deadVal)
         #print(str(deadVal))
         # print(head(t2d,n=10))
@@ -1722,15 +1751,25 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         #print(deadVal)
         t2d<-t(t2d)
         # print(head(t2d))
-        valsToFill<-rnorm(n=length(which(t2d==0)),mean=deadVal/meanThreshold,sd = 10*signalBoost)
+        #ignore the zeros, just make fake cells here, since we generate this already
+        
+        
+        nCells=nrow(t2d)
+        valsToFill<-data.frame(vals=rnorm(n=floor(dummyPercentile * nCells),mean=deadVal,sd = dummySd*deadVal))
+        rownames(valsToFill)<-paste("X",seq(from=1,to=floor(dummyPercentile * nCells)),"-1",sep="")
+        #print(valsToFill)
         # print(valsToFill)
-        t2d[which(t2d==0)]<-valsToFill
+        #t2d[which(t2d==0)]<-valsToFill
+        #print(str(t2d))
+        t2d<-rbind(t2d,as.matrix(valsToFill))
+        #print(tail(t2d))
+        #print(tail(rbind(t2d,valsToFill$vals)))
         #  print(head(t2d,n=10))
-        t2d_trans<-as.vector(t(-1*log2(t2d+deadVal)))
+        t2d_trans<-as.vector(t(sqrt(t2d+deadVal)))
         
         #  print(as.vector(t(-1*log2(t2d+signalBoost))))
         #print(str(as.vector(-1*log2(t2d+signalBoost))))
-        hist(t2d_trans,main=alterationName,breaks = 30)
+        hist(t2d_trans,main=alterationName,breaks = 50)
         # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
         # print(targetChrom)
         # print(posList)
@@ -1754,13 +1793,13 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         {
           #collapse clusters
           #which diff is bigger
-          print(summary(fit1))
+          #print(summary(fit1))
           plot(fit1,what="classification")
           diff_2=abs(fit1$parameters$mean[3]-fit1$parameters$mean[2])
           diff_1=abs(fit1$parameters$mean[2]-fit1$parameters$mean[1])
           clust1_mean<-mean(fit1$parameters$mean[1:2])
           clust2_mean<-fit1$parameters$mean[3]
-          if (diff_2>diff_1)
+          if (diff_2>2.5*diff_1)
           {
             fit1$classification[fit1$classification==2]<-1
             fit1$classification[fit1$classification==3]<-2
@@ -1776,45 +1815,52 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
           #deadVal=unlist(quantile(expectedSignalN,0.3))
           dVal2<-unlist(quantile(expectedSignalN,0.6))
           plot(fit1,what="classification")
-          
+          #recompute means
+          fit1$parameters$mean[1]<-mean(fit1$data[fit1$classification==1])
+          fit1$parameters$mean[2]<-mean(fit1$data[fit1$classification==2])
+          fit1$classification<-sliceList(fit1)
+          plot(fit1,what="classification")
           #  print(dVal2)
-          signalDiff=2^(-1*clust2_mean)-dVal2
-          print(signalDiff)
-          print(fit1$parameters$mean)
+          #signalDiff=2^(-1*clust2_mean)-dVal2
+          signalDiff=dVal2-clust1_mean^2
+          #print(signalDiff)
+          #print(fit1$parameters$mean)
           
-          print(alterationName)
+          #print(alterationName)
           delta_mean = clust2_mean-clust1_mean
-          print(delta_mean)
+          #print(delta_mean)
           #print(clust2_mean-clust1_mean)
           #      delta_mean
           #      message(delta_mean)
-          if (abs(delta_mean)>diffThreshold && (signalDiff<70))
+          if (abs(delta_mean)>diffThreshold)
           {
             alteration_list<-cbind(alteration_list,alterationName)
             alteration_delta<-cbind(alteration_delta,signalDiff)
             fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
             #message(fit1$parameters$mean)
-            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
+            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification[1:nCells])
           }
           #      #message(fit1$parameters)
         }
         if (fit1$G==2)
         {
-          #plot(fit1,what="classification")
+          plot(fit1,what="classification")
           
           #check for and collapse cluster assignments
           #cells in 2 with val < 1 and vice versa
-          fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
-          fit1$classification[fit1$data>fit1$parameters$mean[2] & fit1$classification==1]<-2
+          #fit1$classification[fit1$data<fit1$parameters$mean[1] & fit1$classification==2]<-1
+          #fit1$classification[fit1$data>fit1$parameters$mean[2] & fit1$classification==1]<-2
+          fit1$classification<-sliceList(fit1)
+          plot(fit1,what="classification")
           delta_mean = fit1$parameters$mean[2]-fit1$parameters$mean[1]
           #message(str_c(delta_mean,"MEAN"))
           #       print(delta_mean)
           dVal2<-unlist(quantile(expectedSignalN,0.6))
           
-          signalDiff=2^(-1*fit1$parameters$mean[2])-dVal2
+          signalDiff=dVal2-fit1$parameters$mean[1]^2
           #print(signalDiff)
           #print(delta_mean)
-          if (abs(delta_mean)>diffThreshold && (signalDiff<70))
+          if (abs(delta_mean)>diffThreshold)
           {
             alteration_list<-cbind(alteration_list,alterationName)
             alteration_delta<-cbind(alteration_delta,signalDiff)
@@ -1822,7 +1868,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
             #message(fit1$parameters$mean)
             #uncertainty less than 0.2
             fit1$classification[fit1$uncertainty>uncertaintyCutLoss]<-0
-            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification)
+            dm_per_cell_vals<-cbind.data.frame(dm_per_cell_vals,fit1$classification[1:nCells])
           }
           # }
           #  }
@@ -1849,7 +1895,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     min_loss[is.na(min_loss)]<-0
     #min_loss$Alteration[min_loss$min>lossCutoffCells]
     #cut appropriately
-    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells]) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==2,-1,.)))
+    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells]) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==1,-1,.))) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==2,1,.)))
     return(list(dm_per_cell_vals,alteration_list,alteration_delta))
   }
   return(list())
