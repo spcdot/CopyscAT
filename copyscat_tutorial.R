@@ -87,6 +87,6 @@ sliceList<-function(listClassification,listMeans,listValues)
   listClassification[outliers2]<-1
   return(listClassification)
 }
-scCNVCaller$locPrefix<-"4250"
+
 loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 3,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,lossCutoffCells = 200,quantileLimit=0.2,cpgCutoff=100,dummyQuantile=0.6,dummyPercentile=0.4,dummySd=0.1)
 write.table(x=loh_regions[[1]],file=str_c(scCNVCaller$locPrefix,"samp_loss.csv"),quote=FALSE,row.names = FALSE,sep=",")
