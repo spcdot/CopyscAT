@@ -2284,20 +2284,24 @@ identifyNonNeoplastic <- function(inputMatrix,estimatedCellularity=0.8,nmfCompon
   tscale<-scale(x=t(coef(res)),center=TRUE)
   dist=dist(tscale,method="euclidean")
   
-  clusts<-hclust(dist,method = methodHclust)
+  clusts<-fastcluster::hclust(dist,method = methodHclust)
   #average or ward
   #clusts<-agnes(t(coef(res)),diss = FALSE,metric="euclidean",method="ward")
   #YEAH THIS WORKS AWESOME
   #some tricksy samples may need 4
   
   #add PDF
+  cell_assigns<-cutree(clusts,h=max(clusts$height)*cutHeight)
+  
   if (outputHeatmap==TRUE)
   {
     pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_nmf_heatmap.pdf"),width=6,height=6)
-    heatmap.2(coef(res),Rowv=FALSE,Colv=as.dendrogram(clusts),dendrogram="column",density.info="none",trace="none",scale="none",labCol=FALSE,col=colorRampPalette(viridis(5)),symkey=TRUE,useRaster=TRUE)
+    #print(cell_assigns)
+    #print(factor(cell_assigns))
+    heatmap.2(coef(res),Rowv=FALSE,Colv=as.dendrogram(clusts),dendrogram="column",density.info="none",trace="none",scale="none",labCol=FALSE,col=colorRampPalette(viridis(5)),symkey=FALSE,useRaster=TRUE,ColSideColors=viridis(n=length(unique(as.character(cell_assigns))))[cell_assigns])
+    legend("topright",fill=viridis(n=3),x.intersp = 0.8,y.intersp=0.8,legend=unique(as.character(cell_assigns)),horiz = FALSE,cex = 0.9,border=TRUE,bty="n")
     dev.off()
   }
-  cell_assigns<-cutree(clusts,h=max(clusts$height)*cutHeight)
   cluster_order<-data.frame(cluster=cell_assigns) %>% group_by(cluster) %>% summarise(number=n()) %>% arrange(number)
   tumor_cell_ids=names(which(cell_assigns!=cluster_order$cluster[1]))
   normalCluster=cluster_order$cluster[1]
