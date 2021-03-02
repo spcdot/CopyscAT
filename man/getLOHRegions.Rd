@@ -13,15 +13,16 @@ getLOHRegions(
   minSeg = 3,
   lossCutoffCells = 100,
   targetFun = IQR,
-  signalBoost = 1e-06,
-  lossCutoffReads = 100,
   quantileLimit = 0.3,
   cpgCutoff = 0,
-  meanThreshold = 4
+  meanThreshold = 4,
+  dummyQuantile = 0.5,
+  dummyPercentile = 0.2,
+  dummySd = 0.2
 )
 }
 \arguments{
-\item{lossCutoff}{- minimum Z score for losses (default -0.25)}
+\item{lossCutoff}{- minimum Z score for losses (default is -0.25)}
 
 \item{uncertaintyCutLoss}{- maximum uncertainty to accept a cell assignment}
 
@@ -31,13 +32,17 @@ getLOHRegions(
 
 \item{minSeg}{- minimum number of bins for changepoint analysis}
 
-\item{lossCutoffCells}{- minimum number of cells to accept a LOH (default: 100)}
+\item{lossCutoffCells}{- minimum number of cells to accept a LOH (default is 100)}
 
 \item{targetFun}{- target function to identify LOH regions}
 
-\item{signalBoost}{- value to add prior to logtransforming signal}
+\item{quantileLimit}{quantile of signal per cell population to use to identify losses in changepoints (default is 0.3)}
 
 \item{inputMatrix}{- normalised input fragment count matrix}
+
+\item{signalBoost}{- value to add prior to logtransforming signal}
+
+\item{lossCutoffReads}{minimum number of cells showing alteration to keep in final list (filter)}
 }
 \description{
 Calls putative regions of LOH

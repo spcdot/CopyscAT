@@ -39,7 +39,6 @@ scData_k_norm <- normalizeMatrixN(scData,logNorm = FALSE,maxZero=2000,imputeZero
 
 #collapse into chromosome arm level
 summaryFunction<-cutAverage
-#powval 0.7 - 0.75
 scData_collapse<-collapseChrom3N(scData_k_norm,summaryFunction=summaryFunction,binExpand = 1,minimumChromValue = 100,logTrans = FALSE,tssEnrich = 1,logBase=2,minCPG=300,powVal=0.73) 
 #apply additional filters
 scData_collapse<-filterCells(scData_collapse,minimumSegments = 40,minDensity = 0.1)
@@ -56,13 +55,36 @@ candidate_cnvs_clean<-clusterCNV(initialResultList = candidate_cnvs,medianIQR = 
 #final results and annotation
 final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix = "clean_cnv",sdCNV = 0.5,filterResults=TRUE,filterRange=0.8)
 
+#OPTION 2: automatically identify non-neoplastic cells
+#works best if tumor cellularity is <90% (very small populations of non-neoplastic cells may get missed)
+#run this after filterCells
+#this generates a heatmap in your working directory - check it and adjust parameters as needed
+nmf_results<-identifyNonNeoplastic(scData_collapse,methodHclust="ward.D")
+write.table(x=rownames_to_column(data.frame(nmf_results$cellAssigns),var="Barcode"),file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_nmf_clusters.csv"),quote=FALSE,row.names = FALSE,sep=",")
+print(paste("Normal cluster is: ",nmf_results$clusterNormal))
+#ALTERNATE METHOD FOR CNV CALLING (with normal cells as background)
+#you can use normals identified by NMF or known/suspected normals in the sample to refine the CNV calls (i.e. as a vector of barcode strings)
+#compute central tendencies based on normal cells only
+median_iqr <- computeCenters(scData_collapse %>% select(chrom,nmf_results$normalBarcodes),summaryFunction=summaryFunction)
+#setting medianQuantileCutoff to -1 and feeding non-neoplastic barcodes in as normalCells can improve accuracy of CNV calls
+candidate_cnvs<-identifyCNVClusters(scData_collapse,median_iqr,useDummyCells = TRUE,propDummy=0.25,minMix=0.01,deltaMean = 0.03,deltaBIC2 = 0.25,bicMinimum = 0.1, subsetSize=800,fakeCellSD = 0.09, uncertaintyCutoff = 0.65,summaryFunction=summaryFunction,maxClust = 4,mergeCutoff = 3,IQRCutoff = 0.25,medianQuantileCutoff = -1,normalCells=nmf_results$normalBarcodes) 
+candidate_cnvs_clean<-clusterCNV(initialResultList = candidate_cnvs,medianIQR = candidate_cnvs[[3]],minDiff=1.0) #= 1.5)
+
+#to save this data you can use annotateCNV4 as per usual
+final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix = "clean_cnv",sdCNV = 0.6,filterResults=TRUE,filterRange=0.4)
+
+#the other option is to use annotateCNV4B and feed in the normalBarcodes - this will set the "normal" population to 2 -- if the data is noisy it may lead to false positives so use with caution
+#you may also use this version if you have a list of normal barcodes generated elsewhere
+final_cnv_list<-annotateCNV4B(candidate_cnvs_clean, nmf_results$normalBarcodes, saveOutput=TRUE,outputSuffix = "clean_cnv_b2",sdCNV = 0.6,filterResults=TRUE,filterRange=0.4,minAlteredCellProp = 0.5)
+
+
 #identify double minutes / amplifications
 #note: this is slow, and may take ~5 minutes
 #option to compile this code
 library(compiler)
 dmRead<-cmpfun(identifyDoubleMinutes)
-
-dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100,minThreshold = 4)
+#minThreshold is a time-saving option that doesn't call changepoints on any cell with a maximum Z score less than 4 - you can adjust this to adjust sensitivity of double minute calls (note - lower value = slower)
+dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100,minThreshold = 4) 
 write.table(x=dm_candidates,file=str_c(scCNVCaller$locPrefix,"samp_dm.csv"),quote=FALSE,row.names = FALSE,sep=",")
 
 #assess putative LOH regions

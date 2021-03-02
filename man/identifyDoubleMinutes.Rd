@@ -14,7 +14,8 @@ identifyDoubleMinutes(
   imageNumber = 1000,
   logTrans = FALSE,
   cpgTransform = FALSE,
-  doLosses = FALSE
+  doLosses = FALSE,
+  minThreshold = 4
 )
 }
 \arguments{

@@ -23,7 +23,8 @@ identifyCNVClusters(
   shrinky = 0,
   maxClust = 4,
   IQRCutoff = 0.25,
-  medianQuantileCutoff = 0.3
+  medianQuantileCutoff = 0.3,
+  normalCells = NULL
 )
 }
 \arguments{

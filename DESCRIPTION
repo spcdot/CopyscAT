@@ -1,6 +1,9 @@
 Package: CopyscAT
-Version: 0.2
+Version: 0.30
 Depends:
+    viridis (>= 0.5.1),
+    NMF (>= 0.23.0),
+    fastcluster (>= 1.1.25),
     biomaRt (>= 2.42.1),
     Rtsne (>= 0.15),
     FNN (>= 1.1.3),

@@ -11,8 +11,12 @@ getDoubleMinutes(
   penalty_type = "SIC",
   doLosses = FALSE,
   peakCutoff = 5,
-  lossCutoff = -1
+  lossCutoff = -1,
+  minThreshold = 4
 )
+}
+\arguments{
+\item{minThreshold}{set threshold of Z score to run changepoint analysis; higher value = less sensitive but faster}
 }
 \description{
 This function allows you to express your love of cats.

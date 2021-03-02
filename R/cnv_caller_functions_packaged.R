@@ -396,7 +396,7 @@ testOverlap <- function(interval.1,interval.2){
 #' @export
 identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peakCutoff=5,lossCutoff=-1,doPlots=FALSE,imageNumber=1000,logTrans=FALSE,cpgTransform=FALSE,doLosses=FALSE,minThreshold=4)
 {
-  dm_per_cell<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
+  dm_per_cell<-data.frame(cellName=colnames(inputMatrix %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
 #  print(head(dm_per_cell))
   dm_per_cell[,seq(from=2,to=5)]<-FALSE
   
@@ -426,7 +426,8 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
     message(str_c("processing ",currentChrom))
    # print(nrow(scData_k_cpg))
     #scData_1h <- scData_k_cpg %>% filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% select(-chrom,-pos)
-    scData_1h <- scData_k_cpg %>% filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% select(-chrom,-pos,-cpg)
+    #NEW:
+    scData_1h <- data.frame(scData_k_cpg %>% filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% select(-chrom,-pos,-cpg))
   #  print(scData_1h)
     #seleect peak cutoff
     #unlistValues <- unlist((scData_1h %>% select(-loc1)))
@@ -594,6 +595,8 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
     #beautiful
   }
   #now clean this
+  if (firstRepeatIndex>2)
+  {
   dm_per_cell_clean<-dm_per_cell[,1:(firstRepeatIndex-1)]
 #  dm_per_cell_clean %>% summarize_if(is.logical,sum)
   
@@ -602,6 +605,12 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
   keepAlterations <- dm_per_cell_clean %>% summarize_if(is.logical,sum) %>% gather(Chrom,Value) %>% filter(Value>secondThreshold)
   dm_per_cell_clean <- dm_per_cell_clean %>% select(cellName, keepAlterations$Chrom)
   return(dm_per_cell_clean)
+  }
+  else
+  {
+    print("No double minutes identified")
+  }
+  return(NULL)
 }
 
 #PART 2: CNV CALLING
@@ -942,7 +951,7 @@ makeFakeCells<-function(x,num=300,sd_fact=0.1){
 #' @param median_iqr matrix of medians and IQRs
 #' @param median_iqr matrix of medians and IQRs
 #' @export
-identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,propDummy=0.25, deltaMean=0.03, subsetSize=500, fakeCellSD=0.1, summaryFunction=cutAverage, minDiff=0.25,deltaBIC2=0.25, bicMinimum=0.1,minMix=0.3,uncertaintyCutoff=0.55, mergeCutoff=3,summarySuffix="",shrinky=0,maxClust=4,IQRCutoff=0.25,medianQuantileCutoff=0.3)
+identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,propDummy=0.25, deltaMean=0.03, subsetSize=500, fakeCellSD=0.1, summaryFunction=cutAverage, minDiff=0.25,deltaBIC2=0.25, bicMinimum=0.1,minMix=0.3,uncertaintyCutoff=0.55, mergeCutoff=3,summarySuffix="",shrinky=0,maxClust=4,IQRCutoff=0.25,medianQuantileCutoff=0.3,normalCells=NULL)
 {
   pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_cnv_summary",summarySuffix,".pdf"),width=8,height=6)
   
@@ -952,7 +961,10 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   IQR_chrom_signal<-median_iqr[[2]]
   IQR_chrom_signal_filter <- IQR_chrom_signal %>% filter(chrom %in% median_chrom_signal_filter$chrom)
   #
-  median_chrom_signal_filter$Value<-median(median_chrom_signal_filter$Value)
+  if (medianQuantileCutoff!=-1)
+  {
+     median_chrom_signal_filter$Value<-median(median_chrom_signal_filter$Value)
+  }
   #IQR_chrom_signal_filter$Value<-quantile(IQR_chrom_signal_filter$Value,0.25)
   #IQR_chrom_signal_filter$Value<-1/binSize
   #generate simulated cells
@@ -973,16 +985,25 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   }
   #summaryFunction
   
-  med_iqr2<-computeCenters(inputMatrix = scData_chrom2,summaryFun = summaryFunction)
-  
-  
+  med_iqr2<-list()
+  if (medianQuantileCutoff!=-1)
+  {
+     med_iqr2<-computeCenters(inputMatrix = scData_chrom2,summaryFun = summaryFunction)
+  }
+  else
+  {
+    med_iqr2<-computeCenters(inputMatrix = scData_chrom2 %>% select(chrom,normalCells),summaryFun = summaryFunction) 
+  }
   median_chrom_signal_filter <- med_iqr2[[1]] %>% filter(Value>0)
   IQR_chrom_signal_filter <- med_iqr2[[2]] %>% filter(chrom %in% median_chrom_signal_filter$chrom)
   #print(median_chrom_signal_filter)
   #clean up again
   #changed from median
-  median_chrom_signal_filter$Value<-quantile(median_chrom_signal_filter$Value,medianQuantileCutoff)
-  IQR_chrom_signal_filter$Value<-quantile(IQR_chrom_signal_filter$Value,IQRCutoff)
+  if (medianQuantileCutoff!=-1)
+  {
+    median_chrom_signal_filter$Value<-quantile(median_chrom_signal_filter$Value,medianQuantileCutoff)
+    IQR_chrom_signal_filter$Value<-quantile(IQR_chrom_signal_filter$Value,IQRCutoff)
+  }
   #print(median_chrom_signal_filter)
   print(IQR_chrom_signal_filter)
   #add simulated cells if needed
@@ -1559,6 +1580,99 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
   }
   return(list(chrom_clusters_final,possCNV,consensus_CNV_clusters))
 }
+#' annotateCNV4B
+#' 
+#' Annotates the filtered CNV calls and saves the results, and estimates absolute copy numbers
+#' unlike the regular version, this uses predicted normal cells to set the normal values to 2
+#' @param cnvResults   output of filtered CNVs (set of lists)
+#' @param expectedNormals   list of normal barcodes
+#' @param saveOutput    save output to a file on disk
+#' @param maxClust2    maximum # of clusters
+#' @param outputSuffix   output suffix to save files
+#' @param sdCNV   sd for CNV copy number estimation
+#' @param filterResults filter results to remove likely unaltered chromosomes
+#' @param filterRange  copy number range minimum
+#' @param minAlteredCellProp filtering parameter - proportion of normal cell population that should be unaltered, default is 0.75
+#' @keywords CNV
+#' @keywords output
+#' @export
+#' @examples
+annotateCNV4B <- function(cnvResults,expectedNormals,saveOutput=TRUE,maxClust2=4,outputSuffix="_1",sdCNV=0.6,filterResults=TRUE,filterRange=0.8,minAlteredCellProp=0.75)
+{
+  cell_assignments<-cnvResults[[1]]
+  normal_clusters<-cnvResults[[1]] %>% filter(Cells %in% expectedNormals) %>% summarise_if(is.numeric,mean) %>% mutate_all(round)
+  cell_assignments<-column_to_rownames(cell_assignments,var = "Cells")
+  chrom_clusters_final<-cnvResults[[2]]
+  chrom_clusters_final<-chrom_clusters_final %>% mutate(norm=t(normal_clusters)) %>% mutate(zoffset=if_else(norm=="1",V1,V2))
+  #no offset for X or Y
+  chrom_clusters_final$zoffset[chrom_clusters_final$Chrom %in% c("chrXp","chrXq","chrYp","chrYq")]<-0
+  #colnames(chrom_clusters_final)=c("Chrom",seq(1:(maxClust2-2)),"0")
+  shift_val=0
+  if (length(which(chrom_clusters_final$V2==0))>1)
+  {
+    shift_val = mean(chrom_clusters_final$V1[which(chrom_clusters_final$V2==0)])
+  }
+  #print(shift_val)
+  #identify possible CNVs - can use bins to test
+  possCNV <- cell_assignments %>% summarise_if(is.numeric,list(max)) %>% gather(Chrom,maxClust) %>% dplyr::filter(maxClust>1)
+  possCNV <- possCNV %>% mutate(Type="Unknown")
+  # print(cell_assignments %>% summarise_if(is.numeric,list(max)))
+  #%>% gather(Chrom,maxClust))
+  # print(possCNV)
+  #label by Z scores
+  chrom_clusters_final<-chrom_clusters_final %>% gather("cluster","zscore",starts_with("V")) %>% mutate(cluster=str_remove(cluster,"V")) 
+  #print(chrom_clusters_final)
+  #print(which(is.nan(chrom_clusters_final$zscore)))
+  chrom_clusters_final$zscore<-sapply(sapply(chrom_clusters_final$zscore-chrom_clusters_final$zoffset,pnorm,log.p=TRUE),qnorm,2,sdCNV,log.p=TRUE)
+  #replace each column
+  #print(chrom_clusters_final)
+  trimmedCNV<-vector()
+  thresholdVal=filterRange
+  for (chrom in possCNV$Chrom)
+  {
+    #  print(chrom)
+    zscores<-chrom_clusters_final %>% dplyr::filter(Chrom==chrom) %>% dplyr::select(zscore)
+    #  print(zscores)
+    #print(head(cell_assignments[chrom]))
+    #print(as.character(factor(cell_assignments[,chrom],levels=seq(from=0,to=6),labels = c("2",zscores$zscore))))
+    cell_assignments[,chrom]<-as.numeric(as.character(factor(cell_assignments[,chrom],levels=seq(from=0,to=6),labels = c("2",zscores$zscore))))
+    # print(zscores)
+    #  print(chrom)
+    #    print(range(zscores))
+    if (diff(range(zscores))>=thresholdVal)
+    {
+      #     print(chrom)
+      trimmedCNV<-append(trimmedCNV,chrom)
+    }
+  }
+  #print(trimmedCNV)
+  #output CNV list by cluster
+  #cell_assignments %>% filter()
+  #WITHOUT BLANKS
+  #consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
+  
+  #WITH BLANKS
+  if (!filterResults)
+  {
+    consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
+  }
+  else
+  {
+    #identify chromosomes not used
+    #filter those that have fewer altered than expected # of normal cells
+    unused = cnvResults[[1]] %>% dplyr::filter(str_detect(Cells,"X",negate=TRUE)) %>% gather(chrom,cluster,starts_with("chr")) %>% group_by(chrom,cluster) %>% filter(cluster!=0) %>% summarise(num=n()) %>% group_by(chrom) %>% summarise(min=min(num)) %>% dplyr::filter(min<(minAlteredCellProp*length(expectedNormals)))
+    # print(unused)
+    #print(trimmedCNV)
+    #print(trimmedCNV %in% unused$chrom)
+    trimmedCNV<-trimmedCNV[!(trimmedCNV %in% unused$chrom)]
+    consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% dplyr::filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% dplyr::filter(Chrom %in% trimmedCNV) %>% spread(Chrom,clust) %>% arrange(rowname)
+  }
+  if (saveOutput==TRUE)
+  {
+    write.table(x=consensus_CNV_clusters,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,"_cnv_scores.csv"),quote=FALSE,row.names = FALSE,sep=",")
+  }
+  return(list(chrom_clusters_final,possCNV,consensus_CNV_clusters))
+}
 #' graphCNVDistribution
 #'
 #' Makes graph of normalised, collapsed fragment data
@@ -1586,16 +1700,16 @@ graphCNVDistribution <- function(inputMatrix,outputSuffix="_all")
 #'
 #' Calls putative regions of LOH
 #' @param inputMatrix - normalised input fragment count matrix
-#' @param lossCutoff - minimum Z score for losses (default -0.25)
+#' @param lossCutoff - minimum Z score for losses (default is -0.25)
 #' @param uncertaintyCutLoss - maximum uncertainty to accept a cell assignment
 #' @param diffThreshold - difference threshold between bins
 #' @param minLength - minimum length of a LOH region
 #' @param minSeg - minimum number of bins for changepoint analysis
-#' @param lossCutoffCells - minimum number of cells to accept a LOH (default: 100)
+#' @param lossCutoffCells - minimum number of cells to accept a LOH (default is 100)
 #' @param targetFun - target function to identify LOH regions
 #' @param signalBoost - value to add prior to logtransforming signal
-#' @param lossCutoffReads
-#' @param quantileLimit
+#' @param lossCutoffReads minimum number of cells showing alteration to keep in final list (filter)
+#' @param quantileLimit quantile of signal per cell population to use to identify losses in changepoints (default is 0.3)
 #' @keywords LOH
 #' @keywords CNV
 #' @export
@@ -2147,4 +2261,53 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   write.table(as_tibble(sort.GenomicRanges(cpg_densities))[,c(1:3,6)],str_c(fileSuffixes,"_cpg_densities.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)
   write.table(as_tibble(sort.GenomicRanges(cytoband_densities))[,c(1:3,6)],str_c(fileSuffixes,"_cytoband_densities_granges.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)
   write.table(as_tibble(chrom_sizes),str_c(outputDir,"/",genomeText,"_chrom_sizes.tsv",sep=""),quote=FALSE,sep="\t",col.names = FALSE,row.names=FALSE)
+}
+#' identifyNonNeoplastic
+#' Detect neoplastic vs neoplastic cells using unsupervised clustering
+#' Returns list of barcodes and cluster assignments, and list of non-neoplastic cells
+#' @param inputMatrix   Matrix (after filterCells is called)
+#' @param estimatedCellularity   Expected cellularity of tumour (default 0.8)
+#' @param nmfComponents   # of components to use for NMF/SVD
+#' @param outputHeatmap   Output a heatmap of the clustering (default is yes)
+#' @param cutHeight  Cutting height as percent of max for dendrogram
+#' @param methodHclust  Method for clustering (default is Ward.D)
+#' @keywords CNV
+#' @keywords clustering
+#' @export
+identifyNonNeoplastic <- function(inputMatrix,estimatedCellularity=0.8,nmfComponents=5,outputHeatmap=TRUE,cutHeight=0.6,methodHclust="ward.D")
+{
+  #uses NMF and fast hclust packages
+  message("Running NMF")
+  res <- nmf(column_to_rownames(inputMatrix,var="chrom"), c(nmfComponents), "brunet", seed="nndsvd",.stop=nmf.stop.threshold(0.1),maxIter=2500)
+  message("Computing clusters")
+  #dist<-dist(t(coef(res)),method="euclidean")
+  tscale<-scale(x=t(coef(res)),center=TRUE)
+  dist=dist(tscale,method="euclidean")
+  
+  clusts<-hclust(dist,method = methodHclust)
+  #average or ward
+  #clusts<-agnes(t(coef(res)),diss = FALSE,metric="euclidean",method="ward")
+  #YEAH THIS WORKS AWESOME
+  #some tricksy samples may need 4
+  
+  #add PDF
+  if (outputHeatmap==TRUE)
+  {
+    pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_nmf_heatmap.pdf"),width=6,height=6)
+    heatmap.2(coef(res),Rowv=FALSE,Colv=as.dendrogram(clusts),dendrogram="column",density.info="none",trace="none",scale="none",labCol=FALSE,col=colorRampPalette(viridis(5)),symkey=TRUE,useRaster=TRUE)
+    dev.off()
+  }
+  cell_assigns<-cutree(clusts,h=max(clusts$height)*cutHeight)
+  cluster_order<-data.frame(cluster=cell_assigns) %>% group_by(cluster) %>% summarise(number=n()) %>% arrange(number)
+  tumor_cell_ids=names(which(cell_assigns!=cluster_order$cluster[1]))
+  normalCluster=cluster_order$cluster[1]
+  normal_cell_ids=names(which(cell_assigns==cluster_order$cluster[1]))
+  #flip if less than 50% tumor
+  if (estimatedCellularity<0.5)
+  {
+    tumor_cell_ids=names(which(cell_assigns!=cluster_order$cluster[nrow(cluster_order)]))
+    normal_cell_ids=names(which(cell_assigns==cluster_order$cluster[nrow(cluster_order)]))
+    normalCluster=cluster_order$cluster[nrow(cluster_order)]
+  }
+  return(list(cellAssigns=cell_assigns,normalBarcodes=normal_cell_ids,clusterNormal=normalCluster))
 }
