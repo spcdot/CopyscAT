@@ -8,7 +8,7 @@ Note: assumes files are comma delimited
 Returns a smoothed matrix}
 \usage{
 smoothClusters(
-  inputClusterFile,
+  inputClusters,
   inputCNVList,
   inputCNVClusterFile = "",
   percentPositive = 0.5,
@@ -16,7 +16,7 @@ smoothClusters(
 )
 }
 \arguments{
-\item{inputClusterFile}{input cluster matrix}
+\item{inputClusters}{input cluster matrix}
 
 \item{inputCNVList}{list of CNVs with copy number estimates (2 as normal)}
 

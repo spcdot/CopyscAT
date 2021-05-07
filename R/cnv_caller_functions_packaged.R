@@ -118,7 +118,7 @@ readInputTable<-function(inputFile,sep="\t")
   #scData<-scData %>% mutate(Cell_id = paste(Cell_id,scCNVCaller$cellSuffix,sep="")) 
   
   rownames(scData)<-scData$Cell_id
-  scData<-scData %>% select(-Cell_id)
+  scData<-scData %>% dplyr::select(-Cell_id)
   return(scData)
 }
 
@@ -191,25 +191,25 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
   zero_list<-sc_zeros[which(sc_zeros[,V1<maxZero])]$Cells
   zero_list
   #print(zero_list)
-  #zeros<-rownames_to_column(tmp1,var="Chrom") %>% filter(!(Chrom %in% blacklistRegions$Chrom)) %>% summarise_if(is.numeric,funs(sum(.==0))) %>% gather(Cell,Value) %>% mutate(cellPass=(Value<maxZero))
+  #zeros<-rownames_to_column(tmp1,var="Chrom") %>% dplyr::filter(!(Chrom %in% blacklistRegions$Chrom)) %>% summarise_if(is.numeric,funs(sum(.==0))) %>% gather(Cell,Value) %>% mutate(cellPass=(Value<maxZero))
   scCNVCaller$cellsPassingFilter<-length(zero_list)
   print(str_c(scCNVCaller$cellsPassingFilter, " cells passing filter"))
   #get low confidence regions
   #message(blacklistRegions$Chrom)
   #hist(zeros$Value,breaks=100)
   #zeros$Cell[zeros$cellPass==TRUE]
-  tmp1 <- as.data.frame(sc_t,stringsAsFactors=FALSE) %>% select(zero_list)
+  tmp1 <- as.data.frame(sc_t,stringsAsFactors=FALSE) %>% dplyr::select(zero_list)
   raw_medians<-t(transpose(sc_t[,..zero_list])[,lapply(.SD,median)])
   #tmp1
   tmp1<-cbind.data.frame(tmp1,raw_medians,stringsAsFactors=FALSE)
   #impute zeros in cells passing filter
   if (imputeZeros==TRUE)
   {
-    tmp3 <- tmp1 %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),~ if_else(. == 0,raw_medians,.)) %>% select(-raw_medians)
+    tmp3 <- tmp1 %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),~ if_else(. == 0,raw_medians,.)) %>% dplyr::select(-raw_medians)
   }
   else
   {
-    tmp3 <- tmp1  # %>% select(-raw_medians)
+    tmp3 <- tmp1  # %>% dplyr::select(-raw_medians)
   }
   #now normalize quantiles to account for differences in coverage
   #scData_n<- normalize.quantiles(scData_t)
@@ -257,8 +257,8 @@ getDoubleMinutes = function(inputMatrix,targetCell,doPlot=FALSE,penalty_type="SI
     colnames(cptlist)<-c("Mean","Point")
     cptlist<-as_tibble(cptlist) %>% mutate(Diff = Point - lag(Point))
     #set up list of double minutes; cutoff 0.002
-    d_minutes<-cptlist %>% filter(Mean>peakCutoff)
-    d_losses<-cptlist %>% filter(Mean<lossCutoff)
+    d_minutes<-cptlist %>% dplyr::filter(Mean>peakCutoff)
+    d_losses<-cptlist %>% dplyr::filter(Mean<lossCutoff)
     #message(nrow(d_minutes))
     if (!doLosses)
     {
@@ -396,7 +396,7 @@ testOverlap <- function(interval.1,interval.2){
 #' @export
 identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peakCutoff=5,lossCutoff=-1,doPlots=FALSE,imageNumber=1000,logTrans=FALSE,cpgTransform=FALSE,doLosses=FALSE,minThreshold=4)
 {
-  dm_per_cell<-data.frame(cellName=colnames(inputMatrix %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
+  dm_per_cell<-data.frame(cellName=colnames(inputMatrix %>% dplyr::select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
 #  print(head(dm_per_cell))
   dm_per_cell[,seq(from=2,to=5)]<-FALSE
   
@@ -406,7 +406,7 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
   qualityCutoff=minCells
   #test - can remove centromeres
   #cytoband_data$V4
-  scData_k_cpg<-inputMatrix %>% mutate(cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(arm=scCNVCaller$cytoband_data$V4) %>% filter(arm!="cen", blacklist==0) %>% select(-arm,-blacklist) #%>%  #cpg+
+  scData_k_cpg<-inputMatrix %>% mutate(cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(arm=scCNVCaller$cytoband_data$V4) %>% dplyr::filter(arm!="cen", blacklist==0) %>% dplyr::select(-arm,-blacklist) #%>%  #cpg+
   if (cpgTransform==TRUE)
   {
     if (logTrans==FALSE)
@@ -425,12 +425,12 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
     currentChrom = scCNVCaller$chrom_sizes$chrom[m]
     message(str_c("processing ",currentChrom))
    # print(nrow(scData_k_cpg))
-    #scData_1h <- scData_k_cpg %>% filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% select(-chrom,-pos)
+    #scData_1h <- scData_k_cpg %>% dplyr::filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% dplyr::select(-chrom,-pos)
     #NEW:
-    scData_1h <- data.frame(scData_k_cpg %>% filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% select(-chrom,-pos,-cpg))
+    scData_1h <- data.frame(scData_k_cpg %>% dplyr::filter(chrom==currentChrom ) %>% mutate(loc1=paste(chrom,pos,sep="_")) %>% dplyr::select(-chrom,-pos,-cpg))
   #  print(scData_1h)
     #seleect peak cutoff
-    #unlistValues <- unlist((scData_1h %>% select(-loc1)))
+    #unlistValues <- unlist((scData_1h %>% dplyr::select(-loc1)))
     #peakCutoff = quantile(scale(unlistValues,center=median(unlistValues),scale=IQR(unlistValues)),.99)
     
     #scData_1h[,2:ncol(scData_1h)]<-scale(scData_1h[,2:ncol(scData_1h)],center=TRUE,scale=TRUE)
@@ -584,7 +584,7 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
       if (dim(recurrentEvents)[2]!=0)
       {
         message("copying recurrent events")
-        dm_per_cell_clean <- dm_per_cell_temp %>% select(cellName,colnames(recurrentEvents))
+        dm_per_cell_clean <- dm_per_cell_temp %>% dplyr::select(cellName,colnames(recurrentEvents))
         #copy over columns and column names and increment column counter - ncol-2
         dm_per_cell[,firstRepeatIndex:(firstRepeatIndex+ncol(dm_per_cell_clean)-2)]=dm_per_cell_clean[,2:(ncol(dm_per_cell_clean))]
         #check indexes in following line
@@ -602,8 +602,8 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
   
   #can cutoff here too (def 50-75)
   secondThreshold=qualityCutoff2
-  keepAlterations <- dm_per_cell_clean %>% summarize_if(is.logical,sum) %>% gather(Chrom,Value) %>% filter(Value>secondThreshold)
-  dm_per_cell_clean <- dm_per_cell_clean %>% select(cellName, keepAlterations$Chrom)
+  keepAlterations <- dm_per_cell_clean %>% summarize_if(is.logical,sum) %>% gather(Chrom,Value) %>% dplyr::filter(Value>secondThreshold)
+  dm_per_cell_clean <- dm_per_cell_clean %>% dplyr::select(cellName, keepAlterations$Chrom)
   return(dm_per_cell_clean)
   }
   else
@@ -669,7 +669,7 @@ cutAverage <- function(inputVector)
 scaleMatrixBins <- function(inputMatrix, binSizeRatio,inColumn)
 {
   newMatrix<-inputMatrix %>% mutate(pos_b=floor(as.numeric(!!rlang::sym(inColumn))/(scCNVCaller$binSize*binSizeRatio))*(scCNVCaller$binSize*binSizeRatio))
-  newMatrix<-newMatrix %>% select(-inColumn) %>% group_by(pos_b,chrom) %>% summarise_if(is.numeric,list(sum)) %>% arrange(chrom,pos_b)
+  newMatrix<-newMatrix %>% dplyr::select(-inColumn) %>% group_by(pos_b,chrom) %>% summarise_if(is.numeric,list(sum)) %>% arrange(chrom,pos_b)
   
   return(newMatrix)
 }
@@ -694,8 +694,8 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #these are ordered in the same fashion so should be accurate
   #divide signal by cpg density + 1 (To avoid dividing by zero)
   #remove blacklist regions
-  # %>% filter(cpg!=0)
-  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% filter(cpg>minCPG)
+  # %>% dplyr::filter(cpg!=0)
+  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% dplyr::filter(cpg>minCPG)
   if (binExpand>1)
   {
     #collapse bins
@@ -703,7 +703,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
     #rename column
     scData_k_norm <- scData_k_norm %>% rename(pos = pos_b)
   }
-  # %>% filter(cpg!=0)
+  # %>% dplyr::filter(cpg!=0)
   #gender determination
   sckn<-data.table(scData_k_norm)
   total_cpg<-sckn[,summaryFunction(cpg),by="chrom"]
@@ -726,19 +726,19 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #t(sckn)[2:ncol(sckn),]
   #xy_signal <- as_tibble(apply(t(sckn)[2:ncol(sckn),],2,as.numeric))
   #xy_signal
-  #xy_signal <-scData_k_norm %>% filter(chrom %in% c("chrXq","chrYq")) %>% group_by(chrom) %>% summarise_if(is.numeric,list(quantile),probs=0.8) 
+  #xy_signal <-scData_k_norm %>% dplyr::filter(chrom %in% c("chrXq","chrYq")) %>% group_by(chrom) %>% summarise_if(is.numeric,list(quantile),probs=0.8) 
   sexCutoff=5e-7
   logTrans=FALSE
   if (logTrans)
   {
     xy_signal<-transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
     
-    #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) 
+    #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% dplyr::select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) 
   } else
   {
     xy_signal<-transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
     
-    #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
+    #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% dplyr::select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
     sexCutoff=0.25
   }
   #print(xy_signal)
@@ -790,8 +790,8 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
     #transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL]
     sckn<-sckn[,lapply(.SD,"/",1+log(tssEnrich*cpg^powVal,base=logBase)),by="chrom"][,cpg:=NULL][,lapply(.SD,summaryFunction),by="chrom"]
     #scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(cpg,base=2)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-    #  select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>% 
-    #  mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
+    #  dplyr::select(-cpg) %>% dplyr::filter(chrom %in% median_chrom_signal$chrom) %>% 
+    #  mutate(medianNorm=median_chrom_signal$Value) %>% dplyr::filter(medianNorm>minimumChromValue) 
     #+log(totalcpg,base=2)
     #was 200
   }
@@ -801,8 +801,8 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
     sckn<-sckn[,lapply(.SD,"/",1+tssEnrich*cpg^powVal),by="chrom"][,cpg:=NULL][,lapply(.SD,summaryFunction),by="chrom"]
     #sckn<-sckn[,lapply(.SD,"/",1+tssEnrich*log(cpg,base=logBase)),by="chrom"][,cpg:=NULL][,lapply(.SD,sum),by="chrom"]
     #scData_prechrom<-scData_k_norm %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+sqrt(cpg)))) %>% group_by(chrom) %>% summarise_if(is.numeric,list(summaryFunction)) %>% 
-    #  select(-cpg) %>% filter(chrom %in% median_chrom_signal$chrom) %>%
-    #  mutate(medianNorm=median_chrom_signal$Value) %>% filter(medianNorm>minimumChromValue) 
+    #  dplyr::select(-cpg) %>% dplyr::filter(chrom %in% median_chrom_signal$chrom) %>%
+    #  mutate(medianNorm=median_chrom_signal$Value) %>% dplyr::filter(medianNorm>minimumChromValue) 
   }
   
   sckn<-sckn[,medianNorm:=median_chrom_signal$V1]
@@ -829,16 +829,16 @@ filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0,signalSDcut=
   tmp<-inputMatrix
   initialCells<-ncol(tmp)-1
   cellQuality<-tmp %>% 
-    gather(Cell,Density,ends_with(scCNVCaller$cellSuffix)) %>% select(chrom,Cell,Density) %>%
+    gather(Cell,Density,ends_with(scCNVCaller$cellSuffix)) %>% dplyr::select(chrom,Cell,Density) %>%
     spread(chrom,Density) 
   #print(head(cellQuality))
   cellQuality <- cellQuality %>% mutate(count=rowSums(.[2:ncol(cellQuality)]>minDensity))
   #print(cellQuality$count)
-  barcodesPassing <- (cellQuality %>% filter(count>=minimumSegments))$Cell
+  barcodesPassing <- (cellQuality %>% dplyr::filter(count>=minimumSegments))$Cell
   print(sprintf("%d of %d barcodes passed quality check",length(barcodesPassing),initialCells))
   
   #filter scData_prechrom for quality checks
-  tmp <- tmp %>% select(c("chrom",barcodesPassing))
+  tmp <- tmp %>% dplyr::select(c("chrom",barcodesPassing))
   
   #average total signal per cell
   #remove outlier cells
@@ -849,11 +849,11 @@ filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0,signalSDcut=
   #sd_aveSignal
   #mean_aveSignal - signalSDcut*sd_aveSignal
   #select cells
-  cellsPassingB <- aveSignal %>% filter(between(Average,mean_aveSignal - signalSDcut*sd_aveSignal,mean_aveSignal + signalSDcut*sd_aveSignal)) %>% select(Cell)
+  cellsPassingB <- aveSignal %>% dplyr::filter(between(Average,mean_aveSignal - signalSDcut*sd_aveSignal,mean_aveSignal + signalSDcut*sd_aveSignal)) %>% dplyr::select(Cell)
   #print(str_c(length(cellsPassingB$Cell)," barcodes passed quality check 2"))
   print(sprintf("%d of %d barcodes passed quality check",length(cellsPassingB$Cell),initialCells))
   #filter scData_prechrom for quality checks
-  scData_chrom_filtered <- tmp %>% select(c("chrom",cellsPassingB$Cell)) 
+  scData_chrom_filtered <- tmp %>% dplyr::select(c("chrom",cellsPassingB$Cell)) 
   #average total signal per cell
  #scData_chrom_filtered <- tmp 
   scCNVCaller$finalFilterCells<-length(barcodesPassing)
@@ -873,7 +873,7 @@ filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0,signalSDcut=
 #' listCenters <- computeCenters(inputMatrix,cutAverage)
 computeCenters <- function(inputMatrix,summaryFunction=cutAverage)
 {
-  DT1<-data.table(Chrom=inputMatrix$chrom,Cells=inputMatrix %>% select(ends_with(scCNVCaller$cellSuffix)))
+  DT1<-data.table(Chrom=inputMatrix$chrom,Cells=inputMatrix %>% dplyr::select(ends_with(scCNVCaller$cellSuffix)))
   DT1b<-transpose(DT1,make.names = "Chrom")
   #DT1b<-DT1b[1:(nrow(DT1b)),lapply(.SD,summaryFunction)]
   #DT1b2<-transpose(DT1b,keep.names ="Chrom")
@@ -909,7 +909,7 @@ scaleMatrix <- function(inputMatrix,median_iqr_list,spread=FALSE)
  # print(iqr_list)
   #rep(median(median_list$Value),times=length(median_list$Value))
   tmp[2:ncol(tmp)]=t(scale(t(tmp[2:ncol(tmp)]),center=median_list$Value,scale=iqr_list$Value))
-  tmp <- tmp %>% filter(chrom!="chrYp") 
+  tmp <- tmp %>% dplyr::filter(chrom!="chrYp") 
   if (spread==TRUE)
   {
     scData_chrom_spread <- tmp %>% gather(Cell,Density,2:ncol(tmp))
@@ -957,9 +957,9 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   
   scData_chrom<-inputMatrix
   median_chrom_signal<-median_iqr[[1]]
-  median_chrom_signal_filter <- median_chrom_signal %>% filter(chrom %in% scData_chrom$chrom) %>% filter(chrom!="chrX",chrom!="chrY")
+  median_chrom_signal_filter <- median_chrom_signal %>% dplyr::filter(chrom %in% scData_chrom$chrom) %>% dplyr::filter(chrom!="chrX",chrom!="chrY")
   IQR_chrom_signal<-median_iqr[[2]]
-  IQR_chrom_signal_filter <- IQR_chrom_signal %>% filter(chrom %in% median_chrom_signal_filter$chrom)
+  IQR_chrom_signal_filter <- IQR_chrom_signal %>% dplyr::filter(chrom %in% median_chrom_signal_filter$chrom)
   #
   if (medianQuantileCutoff!=-1)
   {
@@ -977,7 +977,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   if (useDummyCells)
   {
     scData_chrom2 <- left_join(inputMatrix,fakeCellsSorted,by="chrom")
-    scData_chrom2 <- scData_chrom2 %>% filter(chrom!="chrYp")
+    scData_chrom2 <- scData_chrom2 %>% dplyr::filter(chrom!="chrYp")
   }
   else
   {
@@ -992,10 +992,10 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   }
   else
   {
-    med_iqr2<-computeCenters(inputMatrix = scData_chrom2 %>% select(chrom,normalCells),summaryFun = summaryFunction) 
+    med_iqr2<-computeCenters(inputMatrix = scData_chrom2 %>% dplyr::select(chrom,normalCells),summaryFun = summaryFunction) 
   }
-  median_chrom_signal_filter <- med_iqr2[[1]] %>% filter(Value>0)
-  IQR_chrom_signal_filter <- med_iqr2[[2]] %>% filter(chrom %in% median_chrom_signal_filter$chrom)
+  median_chrom_signal_filter <- med_iqr2[[1]] %>% dplyr::filter(Value>0)
+  IQR_chrom_signal_filter <- med_iqr2[[2]] %>% dplyr::filter(chrom %in% median_chrom_signal_filter$chrom)
   #print(median_chrom_signal_filter)
   #clean up again
   #changed from median
@@ -1010,11 +1010,11 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   
   if (useDummyCells) {
     # scData_chrom2[2:ncol(scData_chrom2)]=t(scale(t(scData_chrom2[2:ncol(scData_chrom2)]),center=rep(median(median_chrom_signal_filter$Value),times=length(median_chrom_signal_filter$Value)),scale=rep(median(IQR_chrom_signal_filter$Value),times=length(median_chrom_signal_filter$Value))))
-    #  scData_chrom2 <- scData_chrom2 %>% filter(chrom!="chrYp") 
+    #  scData_chrom2 <- scData_chrom2 %>% dplyr::filter(chrom!="chrYp") 
     #  scData_chrom_spread <- scData_chrom2 %>% gather(Cell,Density,2:ncol(scData_chrom2))
     scData_chrom_spread <- scaleMatrix(scData_chrom2,median_iqr_list = list(median_chrom_signal_filter,IQR_chrom_signal_filter),spread = TRUE)
   }  else {
-    # scData_chrom <- scData_chrom %>% filter(chrom!="chrYp") 
+    # scData_chrom <- scData_chrom %>% dplyr::filter(chrom!="chrYp") 
     # scData_chrom_spread <- scData_chrom %>% gather(Cell,Density,2:ncol(scData_chrom))
     scData_chrom_spread <- scaleMatrix(scData_chrom2,median_iqr_list = list(median_chrom_signal_filter,IQR_chrom_signal_filter),spread = TRUE)
   }
@@ -1038,7 +1038,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
   #initialization
   set.seed(0)
   defSubset=sample(1:length(unique(scData_chrom_spread$Cell)),subsetSize)
-  print(ggplot(scData_chrom_spread %>% filter(Cell %in% unique(scData_chrom_spread$Cell)[defSubset]),aes(chrom,Density))+geom_violin(scale="width") + theme(axis.text.x=element_text(angle=-90,hjust = 0,vjust=0.5),
+  print(ggplot(scData_chrom_spread %>% dplyr::filter(Cell %in% unique(scData_chrom_spread$Cell)[defSubset]),aes(chrom,Density))+geom_violin(scale="width") + theme(axis.text.x=element_text(angle=-90,hjust = 0,vjust=0.5),
                                                                                           
                                                                                           axis.text.y=element_text(color="#000000"),
                                                                                           axis.line.x.bottom = element_line(colour="#000000"),
@@ -1053,7 +1053,7 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
     set.seed(0)
     
     #hc doesn't wo
-    dens1<-scData_chrom_spread %>% filter(chrom==median_chrom_signal_filter$chrom[m5]) %>% select(Density)
+    dens1<-scData_chrom_spread %>% dplyr::filter(chrom==median_chrom_signal_filter$chrom[m5]) %>% dplyr::select(Density)
     initParams=list(noise=TRUE,subset=defSubset) #hcPairs=randomPairs(dens1$Density,modelName = "V")) #,noise=sample(1:length(dens1$Density),10)) 
     #message(median_chrom_signal_filter$chrom[m5])
     #
@@ -1227,7 +1227,8 @@ identifyCNVClusters <- function(inputMatrix, median_iqr, useDummyCells = TRUE,pr
       #  }
        # else
        # {
-          if ((varChange > 2.0) & (diffMean<mergeCutoff))
+          #print(varChange)
+          if ((varChange > 1.8) & (diffMean<mergeCutoff))
           {
       #      message(str_c("cutting dist", median_chrom_signal_filter$chrom[m5]))
       #      print(fit$parameters$mean)
@@ -1305,7 +1306,7 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
   chrom_clusters_final<-chrom_clusters
   
   for (m5 in 1:length(medianIQR[[1]]$chrom)){
-    clust_list=chrom_clusters %>% filter(Chrom==medianIQR[[1]]$chrom[m5])
+    clust_list=chrom_clusters %>% dplyr::filter(Chrom==medianIQR[[1]]$chrom[m5])
     
     zeroClusters<-length(which(clust_list[2:maxClust]==0))
     numClusts<-maxClust-zeroClusters-1
@@ -1338,7 +1339,7 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     while (minDiffA>0 & minDiffA<minDiff)
     {
       tmpa<-data.frame(init=seq(2,1+numClusts))
-      tmpa<-tmpa %>% mutate(init2=lag(init,default=2)) %>% mutate(clust_diff=(as.double(chrom_clusters_final[m5,init])-as.double(chrom_clusters_final[m5,init2]))) %>% filter(clust_diff!=0) %>% arrange(clust_diff)
+      tmpa<-tmpa %>% mutate(init2=lag(init,default=2)) %>% mutate(clust_diff=(as.double(chrom_clusters_final[m5,init])-as.double(chrom_clusters_final[m5,init2]))) %>% dplyr::filter(clust_diff!=0) %>% arrange(clust_diff)
       if (nrow(tmpa)==0)
       {
         minDiffA=0
@@ -1430,18 +1431,18 @@ annotateCNV3 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
   colnames(chrom_clusters_final)=c("Chrom",seq(1:(maxClust2-2)),"0")
   
   #identify possible CNVs - can use bins to test
-  possCNV <- cell_assignments %>% summarise_if(is.numeric,list(max)) %>% gather(Chrom,maxClust) %>% filter(maxClust>1)
+  possCNV <- cell_assignments %>% summarise_if(is.numeric,list(max)) %>% gather(Chrom,maxClust) %>% dplyr::filter(maxClust>1)
   possCNV <- possCNV %>% mutate(Type="Unknown")
   print(cell_assignments %>% summarise_if(is.numeric,list(max)))
   #%>% gather(Chrom,maxClust))
   print(possCNV)
   #output CNV list by cluster
-  #cell_assignments %>% filter()
+  #cell_assignments %>% dplyr::filter()
   #WITHOUT BLANKS
-  #consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
+  #consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% dplyr::filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
   
   #WITH BLANKS
-  consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
+  consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% dplyr::filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% dplyr::filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
   
   if(saveOutput==TRUE)
   {
@@ -1454,7 +1455,7 @@ annotateCNV3 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
   for (suspCNV in possCNV$Chrom)
   {
     #message(possCNV)
-    clusterList<-unique(chrom_clusters_final %>% filter(Chrom==suspCNV) %>% select(-Chrom))
+    clusterList<-unique(chrom_clusters_final %>% dplyr::filter(Chrom==suspCNV) %>% dplyr::select(-Chrom))
     #print(clusterList)
     if (possCNV$maxClust[possCNV$Chrom==suspCNV]==2)
     {
@@ -1480,16 +1481,16 @@ annotateCNV3 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
     }
   }
   #merge cell assignments and annotate
-  v1<-rownames_to_column(cell_assignments) %>% filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom)
+  v1<-rownames_to_column(cell_assignments) %>% dplyr::filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% dplyr::filter(Chrom %in% possCNV$Chrom)
   v2<-left_join(v1,possCNV,by="Chrom") %>% mutate(clust_text=if_else(clust>normCluster,3,if_else(clust<normCluster,1,2))) %>% mutate(clust_text=if_else(clust==0,2,clust_text))
-  v2 <- v2 %>% select(rowname,Chrom,clust_text) %>% spread(Chrom,clust_text) %>% arrange(rowname)
+  v2 <- v2 %>% dplyr::select(rowname,Chrom,clust_text) %>% spread(Chrom,clust_text) %>% arrange(rowname)
   if(saveOutput==TRUE)
   {
     write.table(x=v2,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,"_cnv_anno_binary.csv"),quote=FALSE,row.names = FALSE,sep=",")
   }
   colnames(possCNV)[1]<-"chrom"
   
-  final_cnv_binarized<-inner_join(consensus_CNV_clusters %>% gather(chrom,clust,2:ncol(consensus_CNV_clusters)),possCNV,by="chrom") %>% mutate(clust=if_else(clust==normCluster,0,1)) %>% select(rowname,chrom,clust) %>% spread(chrom,clust)
+  final_cnv_binarized<-inner_join(consensus_CNV_clusters %>% gather(chrom,clust,2:ncol(consensus_CNV_clusters)),possCNV,by="chrom") %>% mutate(clust=if_else(clust==normCluster,0,1)) %>% dplyr::select(rowname,chrom,clust) %>% spread(chrom,clust)
   return(list(v2,possCNV,final_cnv_binarized))
 }
 #'
@@ -1555,19 +1556,19 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
   }
   #print(trimmedCNV)
   #output CNV list by cluster
-  #cell_assignments %>% filter()
+  #cell_assignments %>% dplyr::filter()
   #WITHOUT BLANKS
-  #consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
+  #consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% dplyr::filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
   
   #WITH BLANKS
   if (!filterResults)
   {
-    consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
+    consensus_CNV_clusters<-rownames_to_column(cell_assignments) %>% dplyr::filter(str_detect(rowname,"X",negate=TRUE)) %>% gather(Chrom,clust,2:(ncol(cell_assignments)+1)) %>% dplyr::filter(Chrom %in% possCNV$Chrom) %>% spread(Chrom,clust) %>% arrange(rowname)
   }
   else
   {
     #identify chromosomes not used
-    unused = cnvResults[[1]] %>% dplyr::filter(str_detect(Cells,"X",negate=TRUE)) %>% gather(chrom,cluster,starts_with("chr")) %>% group_by(chrom,cluster) %>% filter(cluster!=0) %>% summarise(num=n()) %>% group_by(chrom) %>% summarise(min=min(num)) %>% dplyr::filter(min<minAlteredCells)
+    unused = cnvResults[[1]] %>% dplyr::filter(str_detect(Cells,"X",negate=TRUE)) %>% gather(chrom,cluster,starts_with("chr")) %>% group_by(chrom,cluster) %>% dplyr::filter(cluster!=0) %>% summarise(num=n()) %>% group_by(chrom) %>% summarise(min=min(num)) %>% dplyr::filter(min<minAlteredCells)
    # print(unused)
     #print(trimmedCNV)
     #print(trimmedCNV %in% unused$chrom)
@@ -1600,7 +1601,7 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
 annotateCNV4B <- function(cnvResults,expectedNormals,saveOutput=TRUE,maxClust2=4,outputSuffix="_1",sdCNV=0.6,filterResults=TRUE,filterRange=0.8,minAlteredCellProp=0.75)
 {
   cell_assignments<-cnvResults[[1]]
-  normal_clusters<-cnvResults[[1]] %>% filter(Cells %in% expectedNormals) %>% summarise_if(is.numeric,mean) %>% mutate_all(round)
+  normal_clusters<-cnvResults[[1]] %>% dplyr::filter(Cells %in% expectedNormals) %>% summarise_if(is.numeric,mean) %>% mutate_all(round)
   cell_assignments<-column_to_rownames(cell_assignments,var = "Cells")
   chrom_clusters_final<-cnvResults[[2]]
   chrom_clusters_final<-chrom_clusters_final %>% mutate(norm=t(normal_clusters)) %>% mutate(zoffset=if_else(norm=="1",V1,V2))
@@ -1723,7 +1724,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   inputMatrix<-inputMatrix[which(inputMatrix[,arm!="cen" & blacklist==0 & cpg>cpgCutoff & chrom!="chrY"])]
   inputMatrix<-inputMatrix[,c("raw_medians","blacklist","cpg","arm"):=NULL]
   #inputMatrix<-input
-  #%>% mutate(cpg=cpg_data$cpg_density) %>% mutate(arm=cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% select(-arm,-blacklist) #%>%  #cpg+
+  #%>% mutate(cpg=cpg_data$cpg_density) %>% mutate(arm=cytoband_data$V4) %>% filter(arm!="cen", blacklist==0, cpg>0) %>% dplyr::select(-arm,-blacklist) #%>%  #cpg+
   #check if raw_medians
   #mutate
   #view(inputMatrix$cpg)
@@ -1732,7 +1733,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
   chromList<-unique(inputMatrix$chrom)
   # chromList<-c("chr9","chr10")
   #print(chromList)
-  dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
+  dm_per_cell_vals<-data.frame(cellName=colnames(inputMatrix  %>% dplyr::select(ends_with(scCNVCaller$cellSuffix))),stringsAsFactors=FALSE)
   alteration_list=c()
   last_coords=c(0,0)
   alteration_delta=c()
@@ -1771,7 +1772,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     #message(targetChrom)
     IQRv<-transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")[,lapply(.SD,quantile,quantileLimit,na.rm=TRUE)]
     # print(IQRv)
-    #IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% select(scCNVCaller$cellSuffix),1,quantile,0.3,na.rm=TRUE)
+    #IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% dplyr::select(scCNVCaller$cellSuffix),1,quantile,0.3,na.rm=TRUE)
     IQRs<-scale(t(IQRv),center=TRUE,scale=TRUE)
     if (is.nan(as.vector(IQRs)[1])) {
       next
@@ -1805,15 +1806,15 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     #set up list of double minutes; cutoff 0.002
     #1.05e-4
     coord_list<-vector(mode = "list")
-    d_loss<-cptlist %>% filter(Mean<(lossCutoff))
+    d_loss<-cptlist %>% dplyr::filter(Mean<(lossCutoff))
     d_lossb<-d_loss
     # print(d_loss)
     if (nrow(d_loss)>0)
     {
-      #%>% filter(chrom==targetChrom) %>% select(chrom,pos)
+      #%>% dplyr::filter(chrom==targetChrom) %>% select(chrom,pos)
       d_lossb<-d_loss %>% mutate(startCoord=as.numeric(tmp_coords$pos[Point-Diff]),endCoord=as.numeric(tmp_coords$pos[Point]),startChrom=tmp_coords$chrom[Point])
       # print(d_lossb)
-      #d_lossb<-d_lossb %>% filter((endCoord-startCoord)>=minLength) 
+      #d_lossb<-d_lossb %>% dplyr::filter((endCoord-startCoord)>=minLength) 
       tmpb_merged<-d_lossb %>% mutate(touching=(startCoord==lag(endCoord)))
       tmpb_merged$touching[1]<-FALSE #otherwise NA
       tmpb_merged <- tmpb_merged %>% mutate(startCoord=if_else(touching==TRUE,lag(startCoord),startCoord),Diff=if_else(touching==TRUE,Diff+lag(Diff),Diff))
@@ -1822,7 +1823,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
       # print(which(tmpb_merged$touching==TRUE)-1)
       if (length(which(tmpb_merged$touching==TRUE)) > 0)
       {
-        tmp_merged_final<-tmpb_merged %>% filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% select(-touching)
+        tmp_merged_final<-tmpb_merged %>% dplyr::filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% select(-touching)
         d_lossb<-tmp_merged_final
       }
       d_lossb <- d_lossb %>% arrange(startChrom,as.numeric(startCoord))
@@ -1884,7 +1885,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
         #  print(as.vector(t(-1*log2(t2d+signalBoost))))
         #print(str(as.vector(-1*log2(t2d+signalBoost))))
         hist(t2d_trans,main=alterationName,breaks = 50)
-        # print(inputMatrix %>% filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
+        # print(inputMatrix %>% dplyr::filter(chrom==targetChrom,pos %in% posList) %>% select(-cpg))
         # print(targetChrom)
         # print(posList)
         fit1<-Mclust(t2d_trans,G=2:3,modelNames=c("V"),initialization = list(noise=TRUE))
@@ -2040,7 +2041,7 @@ annotateLosses<-function(lossFile)
                        filters = filts, 
                        values = vals, 
                        mart = ensembl)
-    coords_final$genes[i4]<-str_c(unique((genes_found %>% filter(transcript_length>400) %>% arrange(desc(transcript_length)))$hgnc_symbol),collapse=",")
+    coords_final$genes[i4]<-str_c(unique((genes_found %>% dplyr::filter(transcript_length>400) %>% arrange(desc(transcript_length)))$hgnc_symbol),collapse=",")
   }
   write.table(x=coords_final,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_loss_annotations.csv"),quote=FALSE,row.names = FALSE,sep=",")
   return(coords_final)
@@ -2071,17 +2072,18 @@ readInputTable<-function(inputFile,sep="\t")
 #' Read clusters from file and CNV calls from input or an external file
 #' Note: assumes files are comma delimited
 #' Returns a smoothed matrix
-#' @param inputClusterFile   input cluster matrix
+#' @param inputClusters   input cluster matrix
 #' @param inputCNVList   list of CNVs with copy number estimates (2 as normal)
 #' @param inputCNVClusterFile  alternate option to specify external comma delimited file for CNV calls
 #' @param percentPositive   minimum percentage of a cluster to use to call positive for CNV, default is 0.5 (50 percent)
 #' @keywords CNV
 #' @keywords clusters
 #' @export
-smoothClusters <- function(inputClusterFile,inputCNVList,inputCNVClusterFile="",percentPositive=0.5,removeEmpty=TRUE) 
+smoothClusters <- function(inputClusters,inputCNVList,inputCNVClusterFile="",percentPositive=0.5,removeEmpty=TRUE) 
 {
-  inputClusters<-read.table(inputClusterFile,stringsAsFactors=FALSE,header=TRUE,sep=",")
+  #inputClusters<-read.table(inputClusterFile,stringsAsFactors=FALSE,header=TRUE,sep=",")
   colnames(inputClusters)[2]<-"clust"
+  colnames(inputClusters)[1]<-"Barcode"
   inputCNV<-""
   if (inputCNVClusterFile!="")
   {
@@ -2093,7 +2095,7 @@ smoothClusters <- function(inputClusterFile,inputCNVList,inputCNVClusterFile="",
   else
   {
     #input from CNV calls
-    inputCNV<-inputCNVList[[1]]
+    inputCNV<-inputCNVList
     #colnames(inputCNV)[1]<-"Barcode"
   }
   colnames(inputCNV)[1]<-"Barcode"
@@ -2104,7 +2106,9 @@ smoothClusters <- function(inputClusterFile,inputCNVList,inputCNVClusterFile="",
   #print(inputClusters[,1])
   b1<-left_join(inputClusters,inputCNV,by="Barcode")
   #SMOOTH
+  print(b1)
   b1c<-b1 %>% mutate(clust=inputClusters[,2])
+  print(b1c)
   specRound <- function(x,boost=0.1)
   {
     #  print(x-2)
@@ -2117,6 +2121,7 @@ smoothClusters <- function(inputClusterFile,inputCNVList,inputCNVClusterFile="",
   b1c_round<-b1c %>% mutate_at(vars(starts_with("chr")),funs(if_else(is.na(.),2,.))) %>% 
     group_by(clust) %>% summarise_at(vars(starts_with("chr")),list(mean))  %>% 
     mutate_at(vars(starts_with("chr")),funs(specRound(.,0.5 - percentPositive)))
+  print(b1c_round)
   if (removeEmpty)
   {
   isMultiple<-function(x){
@@ -2152,7 +2157,7 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   fileSuffixes=str_c(outputDir,"/",genomeText,"_",tileWidth,sep="")
   print(str_c("Output to ",fileSuffixes,sep=""))
   #chrom sizes - 
-  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix|_|MT",negate=TRUE)) %>% filter(keeper==TRUE) %>% select(-keeper)
+  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix|_|MT",negate=TRUE)) %>% dplyr::filter(keeper==TRUE) %>% select(-keeper)
   print(chrom_sizes)
   chroms<-GRanges(seqnames=genomeObject@seqinfo)
   #print(which(chroms@seqnames %in% chrom_sizes$chrom))
@@ -2314,4 +2319,38 @@ identifyNonNeoplastic <- function(inputMatrix,estimatedCellularity=0.8,nmfCompon
     normalCluster=cluster_order$cluster[nrow(cluster_order)]
   }
   return(list(cellAssigns=cell_assigns,normalBarcodes=normal_cell_ids,clusterNormal=normalCluster))
+}
+#' estimateCellCycleFraction
+#' Detect cycling cells using chromosome X
+#' Returns list of barcodes and cluster assignments, and list of non-neoplastic cells
+#' @param inputMatrix   Matrix (unfiltered before normalization only)
+#' @param cutoff   Minimum cutoff to discard noisy cell
+#' @param maxG   maximum number of G components to use (default is 4)
+#' @param logTrans   log transform data (default is faulse)
+#' @param modelName  Model option for MCLUST (default is E)
+#' @param chromToUse  Chromosome to use for normalization (default is chrX)
+#' @keywords CNV
+#' @keywords cell cycle
+#' @export
+estimateCellCycleFraction<-function(inputMatrix,sampName,cutoff=10000,maxG=4,logTrans=FALSE,modelName="E",chromToUse="chrX")
+{
+  dt<-data.table(t(inputMatrix))
+  chrXRows<-which(str_detect(colnames(inputMatrix),chromToUse))
+  chrXsignal<-t(dt[chrXRows,lapply(.SD,sum)])
+  #print histogram of signal
+  print(hist(chrXsignal[chrXsignal>cutoff],breaks=500,main = sprintf("%s_X_signal",sampName)))
+  #cutoff to remove near-zero/high-noise cells
+  chrXsignal<-chrXsignal[chrXsignal>cutoff,]
+  #option to log transform - may work better for some samples
+  if (logTrans)
+  {
+    chrXsignal<-log(chrXsignal+1,base=2)
+  }
+  #enable gaussian noise - here I use an equal variance model, because I find it works better
+  fit<-Mclust(chrXsignal,G=1:maxG,modelNames = c(modelName),initialization = list(noise=TRUE))
+  #print results of clustering
+  print(plot(fit,what="classification"))
+  print(summary(fit))
+  print(fit$parameters)
+  return(fit$classification)
 }

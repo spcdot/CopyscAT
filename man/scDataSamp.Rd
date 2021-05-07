@@ -3,19 +3,17 @@
 \docType{data}
 \name{scDataSamp}
 \alias{scDataSamp}
-\title{scData sample matrix}
+\title{Sample processed matrix for testing}
 \format{
 data.frame with 3103 columns and 1371 rows
+}
+\source{
+1371 adult GBM cells
 }
 \usage{
 scDataSamp
 }
 \description{
-1371 adult GBM cells
-}
-\details{
 Sample processed matrix for testing
-
-NBD
 }
 \keyword{datasets}
