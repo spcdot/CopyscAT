@@ -15,6 +15,7 @@ library(CopyscAT)
 #load your favourite genome
 library(BSgenome.Hsapiens.UCSC.hg38)
 #use it to save references - this will create a genome chrom.sizes file, a cytobands file and a CpG file
+#NOTE: 21-Oct-2021 the below doesn't work - please download the preset files in the GitHub repo
 generateReferences(BSgenome.Hsapiens.UCSC.hg38,genomeText = "hg38",tileWidth = 1e6,outputDir = "~")
 
 ##### REGULAR WORKFLOW #####

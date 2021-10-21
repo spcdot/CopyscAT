@@ -168,7 +168,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
   blacklistPropCutoff=blacklistProp*nCells
   #good
   #find bad columns
-  sc_lines<-data.table(scData)
+  sc_lines<-data.table(inputMatrix)
  # head(sc_lines)
   #blacklistCutoff = 500
   sc_lines<-sc_lines[,lapply(.SD,function(x) x<blacklistCutoff)][,lapply(.SD,sum)]
@@ -1788,7 +1788,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     plot(cm@data.set,xlab="Chromosome bin",ylim=c(-5,5),ylab="Z-score")
     p1<-as_tibble(cptlist) %>% mutate(Start=lag(Point))
     p1$Start[1]<-0
-    p1<-p1 %>% select(Start,Mean,Point,Mean)
+    p1<-p1 %>% dplyr::select(Start,Mean,Point,Mean)
     for (a in 1:nrow(p1))
     {
       #print(segments(p1$Start[a],p1$Mean[a],p1$Point[a],p1$Mean[a],col="red"))
@@ -1823,7 +1823,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
       # print(which(tmpb_merged$touching==TRUE)-1)
       if (length(which(tmpb_merged$touching==TRUE)) > 0)
       {
-        tmp_merged_final<-tmpb_merged %>% dplyr::filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% select(-touching)
+        tmp_merged_final<-tmpb_merged %>% dplyr::filter(!(row_number() %in% (which(tmpb_merged$touching==TRUE)-1))) %>% dplyr::select(-touching)
         d_lossb<-tmp_merged_final
       }
       d_lossb <- d_lossb %>% arrange(startChrom,as.numeric(startCoord))
@@ -2005,12 +2005,12 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     #rowSums(.[2:ncol(cellQuality)]>0)
     loss_cluster_counts<-dm_per_cell_vals %>% gather(Alteration,Clust,2:ncol(dm_per_cell_vals)) %>% group_by(Alteration) %>% count(Alteration,Clust)
     #  print(loss_cluster_counts)
-    min_loss<-loss_cluster_counts %>% spread(Clust,n) %>% select(-'0') %>% mutate(min=min(`1`,`2`))
+    min_loss<-loss_cluster_counts %>% spread(Clust,n) %>% dplyr::select(-'0') %>% mutate(min=min(`1`,`2`))
     #  print(min_loss)
     min_loss[is.na(min_loss)]<-0
     #min_loss$Alteration[min_loss$min>lossCutoffCells]
     #cut appropriately
-    dm_per_cell_vals <- dm_per_cell_vals %>% select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells]) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==1,-1,.))) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==2,1,.)))
+    dm_per_cell_vals <- dm_per_cell_vals %>% dplyr::select(cellName,min_loss$Alteration[min_loss$min>lossCutoffCells]) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==1,-1,.))) %>% mutate_at(vars(starts_with('chr')),funs(if_else(.==2,1,.)))
     return(list(dm_per_cell_vals,alteration_list,alteration_delta))
   }
   return(list())
