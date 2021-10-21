@@ -2171,6 +2171,32 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   #tile the genome
   tiles<-tileGenome(seqlengths(chroms),tilewidth=tileWidth,cut.last.tile.in.chrom=T)
   print(tiles)
+  tbl.cytobands<-GRanges()
+  tbl.cpgIslandExt<-GRanges()
+  seqInfo<-SeqinfoForUCSCGenome(genomeText)
+  if (is.null(seqInfo))
+  {
+    print("fallback to UCSC REST API (manual table retrieval)")
+    cpgResults = jsonlite::fromJSON(sprintf("https://api.genome.ucsc.edu/getData/track?genome=%s;track=cpgIslandExtUnmasked",genomeText),simplifyMatrix=TRUE)
+    cytoBandResults = jsonlite::fromJSON(sprintf("https://api.genome.ucsc.edu/getData/track?genome=%s;track=cytoBand",genomeText),simplifyMatrix=TRUE)
+    library(GenomicRanges)
+    cytoBandRanges<-GRangesList(cytoBandResults$cytoBand)
+    cytoBandRanges<-unlist(cytoBandRanges)
+    cpgResultRanges=GRanges()
+    #print(names(cpgResults$cpgIslandExtUnmasked))
+    for (i in names(cpgResults$cpgIslandExtUnmasked))
+    {
+      if (length(cpgResults$cpgIslandExtUnmasked[[i]])>0)
+      {
+      cpgResultRanges=c(cpgResultRanges,GRanges(cpgResults$cpgIslandExtUnmasked[[i]]))
+      }
+    }
+    print(cpgResultRanges)
+    tbl.cytobands<-cytoBandRanges
+    tbl.cpgIslandExt<-cpgResultRanges
+  }
+  else
+  {
   mySession = browserSession("UCSC")
   genome(mySession) <- genomeText
   tbl.cytobands <- getTable(
@@ -2179,11 +2205,11 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   tbl.cpgIslandExt <- getTable(
     ucscTableQuery(mySession, track="cpgIslandExtUnmasked",
                    table="cpgIslandExtUnmasked"))
-  
-  tbl.cytobands
-  # print(tbl.cytobands)
   tbl.cytobands<-GRanges(tbl.cytobands)
   tbl.cpgIslandExt<-GRanges(tbl.cpgIslandExt)
+  }
+  tbl.cytobands
+  # print(tbl.cytobands)
   #now intersect these to generate the reference files
   #http://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/findOverlaps-methods.html
   #MATCHES FOR Cytoband
@@ -2231,14 +2257,11 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   matches<-findOverlaps(tiles,tbl.cpgIslandExt,select="all",ignore.strand=TRUE)
   #sum up the stuff
   #https://www.rdocumentation.org/packages/S4Vectors/versions/0.4.0/topics/Hits-class
-  
   b1<-tbl.cpgIslandExt[subjectHits(matches)]
   mcols(b1) <- cbind.data.frame(
     mcols(b1),
     ranges(tiles[queryHits(matches)]),
     chrom(tiles[queryHits(matches)]))
-  #print(b1)
-  #print(tiles[queryHits(matches)])
   
   
   #NEED TO FIND TILES THAT AREN'T MATCHES
