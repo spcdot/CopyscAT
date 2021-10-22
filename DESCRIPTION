@@ -24,5 +24,5 @@ Depends:
     ggplot2 (>= 3.3.0),
     jsonlite (>= 1.7.0),
     R (>= 2.10)
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 LazyData: true

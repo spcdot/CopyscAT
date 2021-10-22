@@ -67,11 +67,15 @@ final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix 
 
 
 
-#OPTION 2: automatically identify non-neoplastic cells (recommended) and use these for control
+#OPTION 2: automatically identify non-neoplastic cells and use these for control
+#note: still somewhat experimental - use if the copy number calls from A don't make sense (e.g. baseline appears incorrect)
 #works best if tumor cellularity is <90% (very small populations of non-neoplastic cells may get missed)
 #run this after filterCells
 #this generates a heatmap in your working directory - check it and adjust parameters as needed
+#default parameters: estimatedCellularity=0.8,nmfComponents=5,outputHeatmap=TRUE,cutHeight=0.6
+#change cutHeight (height at which target dendrogram is cut) and nmfComponents as necessary to improve segeregation of clusters in your sample
 nmf_results<-identifyNonNeoplastic(scData_collapse,methodHclust="ward.D")
+#?identifyNonNeoplastic
 write.table(x=rownames_to_column(data.frame(nmf_results$cellAssigns),var="Barcode"),file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_nmf_clusters.csv"),quote=FALSE,row.names = FALSE,sep=",")
 print(paste("Normal cluster is: ",nmf_results$clusterNormal))
 
