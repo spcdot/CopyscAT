@@ -86,8 +86,12 @@ lines_read = 0
 with gzip.open(file_init,'rt') as reader:
     for line1 in reader:
         #print(line1 + " " + str(len(cell_ids)))
+       #remove header from new version of cellranger-atac
       if (line1.find('#')!=-1):
         continue 
+        #remove random chromosomes
+      #if (line1.find('KI')!=-1):
+      #  continue
       line_split = line1.split('\t')
       readLength=int(line_split[2])-int(line_split[1])-1
       #print(line_split[0] + "\n")

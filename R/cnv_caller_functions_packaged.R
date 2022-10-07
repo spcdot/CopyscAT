@@ -2330,17 +2330,21 @@ identifyNonNeoplastic <- function(inputMatrix,estimatedCellularity=0.8,nmfCompon
     legend("topright",fill=viridis(n=3),x.intersp = 0.8,y.intersp=0.8,legend=unique(as.character(cell_assigns)),horiz = FALSE,cex = 0.9,border=TRUE,bty="n")
     dev.off()
   }
-  cluster_order<-data.frame(cluster=cell_assigns) %>% group_by(cluster) %>% summarise(number=n()) %>% arrange(number)
-  tumor_cell_ids=names(which(cell_assigns!=cluster_order$cluster[1]))
-  normalCluster=cluster_order$cluster[1]
-  normal_cell_ids=names(which(cell_assigns==cluster_order$cluster[1]))
-  #flip if less than 50% tumor
-  if (estimatedCellularity<0.5)
+  by_cluster<-left_join(rownames_to_column(data.frame(t(column_to_rownames(inputMatrix,"chrom"))),var="barcode"),
+                        rownames_to_column(data.frame(cluster=cell_assigns),var="barcode"),by="barcode")
+  #now estimate the residuals etc for each cluster
+  if (outputHeatmap==TRUE)
   {
-    tumor_cell_ids=names(which(cell_assigns!=cluster_order$cluster[nrow(cluster_order)]))
-    normal_cell_ids=names(which(cell_assigns==cluster_order$cluster[nrow(cluster_order)]))
-    normalCluster=cluster_order$cluster[nrow(cluster_order)]
+  pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_nmf_violinplot.pdf"),width=9,height=6)
+  print(ggplot(by_cluster %>% gather(starts_with("chr"),key="chrom",value="value"),aes(chrom,value)) + geom_violin() + theme(axis.text.x=element_text(angle=-90,vjust = 0.5,hjust = 0, color = "#000000",size = 6)) + facet_wrap(~cluster))
+  dev.off()
   }
+  target_cluster_1=data.frame(t(column_to_rownames(by_cluster %>% group_by(cluster) %>% summarise_if(is.numeric,list(mean)),var="cluster"))) %>% summarise_if(is.numeric,list(var)) %>% gather(key="cluster",value="var") %>% mutate(cluster=as.numeric(str_remove(cluster,"X"))) %>% arrange(var) %>% slice_head(n=1) %>% select(cluster)
+  
+  #cluster_order<-data.frame(cluster=cell_assigns) %>% group_by(cluster) %>% summarise(number=n()) %>% arrange(number)
+  tumor_cell_ids=names(which(cell_assigns!=target_cluster_1))
+  normalCluster=unlist(target_cluster_1)
+  normal_cell_ids=names(which(cell_assigns==unlist(normalCluster)))
   return(list(cellAssigns=cell_assigns,normalBarcodes=normal_cell_ids,clusterNormal=normalCluster))
 }
 #' estimateCellCycleFraction
