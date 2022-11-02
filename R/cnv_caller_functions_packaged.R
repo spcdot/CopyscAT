@@ -2150,7 +2150,7 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   fileSuffixes=str_c(outputDir,"/",genomeText,"_",tileWidth,sep="")
   print(str_c("Output to ",fileSuffixes,sep=""))
   #chrom sizes - 
-  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix|_|MT",negate=TRUE)) %>% dplyr::filter(keeper==TRUE) %>% select(-keeper)
+  chrom_sizes<-rownames_to_column(data.frame(length=seqlengths(genomeObject)),var="chrom") %>% mutate(keeper=str_detect(chrom,pattern="alt|random|chrUn|fix|_|MT",negate=TRUE)) %>% dplyr::filter(keeper==TRUE) %>% dplyr::select(-keeper)
   print(chrom_sizes)
   chroms<-GRanges(seqnames=genomeObject@seqinfo)
   #print(which(chroms@seqnames %in% chrom_sizes$chrom))
