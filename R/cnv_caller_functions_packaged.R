@@ -110,7 +110,6 @@ initializeStandards <- function(chromSizeFile,cpgDataFile,cytobandFile)
 #' @keywords initialisation
 #' @keywords loading files
 #' @export
-#' @examples
 readInputTable<-function(inputFile,sep="\t")
 {
   scData<-fread(inputFile,header=TRUE,stringsAsFactors = FALSE,sep="\t",data.table = FALSE)
@@ -392,7 +391,7 @@ testOverlap <- function(interval.1,interval.2){
 #' @param peakCutoff Z score minimum to retain a putative DM/amplification
 #' @param doPlots  Plot occasional cells as QC
 #' @param imageNumber  Plot every Nth cell (use in conjunction with doPlots = TRUE)
-#' @param minThreshold
+#' @param minThreshold  Z-score maximum to continue processing cells (can save time in larger datasets; default 4) 
 #' @export
 identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peakCutoff=5,lossCutoff=-1,doPlots=FALSE,imageNumber=1000,logTrans=FALSE,cpgTransform=FALSE,doLosses=FALSE,minThreshold=4)
 {
@@ -625,7 +624,6 @@ identifyDoubleMinutes<-function(inputMatrix,minCells=100,qualityCutoff2=100,peak
 #' @param inputVector - vector of numbers
 #' @keywords average`
 #' @export
-#' @examples
 cutAverage <- function(inputVector)
 {
   #remove top and bottom 5%
@@ -662,10 +660,8 @@ cutAverage <- function(inputVector)
 #' Merges together adjacent windows
 #' @param inputMatrix matrix of input stuff
 #' @param binSizeRatio ratio to expand by (2 = double bin size)
-#' @param inColumn
-#' @keywords cats
-#' @examples
-#' cat_function()
+#' @param inColumn input column
+#' @export
 scaleMatrixBins <- function(inputMatrix, binSizeRatio,inColumn)
 {
   newMatrix<-inputMatrix %>% mutate(pos_b=floor(as.numeric(!!rlang::sym(inColumn))/(scCNVCaller$binSize*binSizeRatio))*(scCNVCaller$binSize*binSizeRatio))
@@ -822,7 +818,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
 #' @keywords filter
 #' @keywords CNV
 #' @export
-#' @examples
+#' @examples 
 #' filterCells(inputMatrix,minimumSegments=41)
 filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0,signalSDcut=2)
 {
@@ -938,8 +934,8 @@ makeFakeCells<-function(x,num=300,sd_fact=0.1){
 #uncertainty cutoff of less than 1 cuts off more and more cells
 #' identifyCNVClusters
 #'
-#' How the sausage is made - uses Gaussian decomposition to analyse a filtered, normalised input matrix and call putative CNVs
-#' @param inputMatrix
+#' Uses Gaussian decomposition to analyse a filtered, normalised input matrix and call putative CNVs
+#' @param inputMatrix input matrix after collapsing and filtering steps
 #' @param median_iqr matrix of medians and IQRs
 #' @param useDummyCells use pseudodiploid control
 #' @param propDummy pseudodiploid control as proportion of normal cells (0.25 = 25 percent)
@@ -1597,7 +1593,6 @@ annotateCNV4 <- function(cnvResults,saveOutput=TRUE,maxClust2=4,outputSuffix="_1
 #' @keywords CNV
 #' @keywords output
 #' @export
-#' @examples
 annotateCNV4B <- function(cnvResults,expectedNormals,saveOutput=TRUE,maxClust2=4,outputSuffix="_1",sdCNV=0.6,filterResults=TRUE,filterRange=0.8,minAlteredCellProp=0.75)
 {
   cell_assignments<-cnvResults[[1]]
@@ -1682,7 +1677,7 @@ annotateCNV4B <- function(cnvResults,expectedNormals,saveOutput=TRUE,maxClust2=4
 #' @keywords output
 #' @export
 #' @examples
-#' graphCNVDistribution(inputMatrix,outputSuffix="unfiltered)
+#' graphCNVDistribution(inputMatrix,outputSuffix="unfiltered")
 graphCNVDistribution <- function(inputMatrix,outputSuffix="_all")
 {
   pdf(file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,outputSuffix,"_graph.pdf"),width=8,height=6)
@@ -2021,14 +2016,12 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
 #' @param lossFile the file for LOH putative reginos
 #' @keywords Losses
 #' @export
-#' @examples
-#' cat_function()
 annotateLosses<-function(lossFile)
 {
   coords<-t(as.data.frame(sapply(lossFile[[2]],str_split,"[._]"),stringsAsFactors = FALSE))
   coords
   colnames(coords)<-c("chrom","start","end")
-  coords_final<-as_tibble(coords) %>% select(chrom,start,end) %>% mutate(genes="")
+  coords_final<-as_tibble(coords) %>% dplyr::select(chrom,start,end) %>% mutate(genes="")
   #annotate
   ensembl <- useMart("ensembl")
   ensembl = useDataset("hsapiens_gene_ensembl",mart=ensembl)
@@ -2179,7 +2172,6 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
     print("fallback to UCSC REST API (manual table retrieval)")
     cpgResults = jsonlite::fromJSON(sprintf("https://api.genome.ucsc.edu/getData/track?genome=%s;track=cpgIslandExtUnmasked",genomeText),simplifyMatrix=TRUE)
     cytoBandResults = jsonlite::fromJSON(sprintf("https://api.genome.ucsc.edu/getData/track?genome=%s;track=cytoBand",genomeText),simplifyMatrix=TRUE)
-    library(GenomicRanges)
     cytoBandRanges<-GRangesList(cytoBandResults$cytoBand)
     cytoBandRanges<-unlist(cytoBandRanges)
     cpgResultRanges=GRanges()
@@ -2339,7 +2331,7 @@ identifyNonNeoplastic <- function(inputMatrix,estimatedCellularity=0.8,nmfCompon
   print(ggplot(by_cluster %>% gather(starts_with("chr"),key="chrom",value="value"),aes(chrom,value)) + geom_violin() + theme(axis.text.x=element_text(angle=-90,vjust = 0.5,hjust = 0, color = "#000000",size = 6)) + facet_wrap(~cluster))
   dev.off()
   }
-  target_cluster_1=data.frame(t(column_to_rownames(by_cluster %>% group_by(cluster) %>% summarise_if(is.numeric,list(mean)),var="cluster"))) %>% summarise_if(is.numeric,list(var)) %>% gather(key="cluster",value="var") %>% mutate(cluster=as.numeric(str_remove(cluster,"X"))) %>% arrange(var) %>% slice_head(n=1) %>% select(cluster)
+  target_cluster_1=data.frame(t(column_to_rownames(by_cluster %>% group_by(cluster) %>% summarise_if(is.numeric,list(mean)),var="cluster"))) %>% summarise_if(is.numeric,list(var)) %>% gather(key="cluster",value="var") %>% mutate(cluster=as.numeric(str_remove(cluster,"X"))) %>% arrange(var) %>% slice_head(n=1) %>% dplyr::select(cluster)
   
   #cluster_order<-data.frame(cluster=cell_assigns) %>% group_by(cluster) %>% summarise(number=n()) %>% arrange(number)
   tumor_cell_ids=names(which(cell_assigns!=target_cluster_1))
@@ -2380,4 +2372,123 @@ estimateCellCycleFraction<-function(inputMatrix,sampName,cutoff=10000,maxG=4,log
   print(summary(fit))
   print(fit$parameters)
   return(fit$classification)
+}
+#' getAlteredSegments 
+#'
+#' This function relies on pre-determined 'normal' cell set to compute smaller regions of altered accessibility
+#' @param inputMatrix Unprocessed and normalized input matrix
+#' @param clusterResults Result list of identifyNonNeoplastic
+#' @param minSeglen Minimum segment length for changepoint analysis
+#' @param lossThreshold fold change threshold to call something a relative loss (default 0.5)
+#' @param gainThreshold fold change threshold to  call something a relative gain (default 1.6)
+#' @param minCutoff Number of altered cells in smallest group to keep a putative alteration
+#' @param rangeThreshold threshold filter between max and min fold change to keep an alteration (Default 0.4)
+#' @keywords CNV comparison
+#' @export
+getAlteredSegments <- function(inputMatrix,clusterResults,minSeglen=3,lossThreshold=0.5,gainThreshold=1.6,minCutoff=50, rangeThreshold=0.4)
+{
+  coefs_list=data.frame()
+  
+  curChrom = ""
+  
+  #iterate overall chromosomes
+  chromList<-unique(inputMatrix$chrom)
+  for (curChrom in chromList)
+  {
+    
+    test1<-inputMatrix %>% filter(chrom==curChrom)
+    
+    #test1[i,]
+    for (i in 1:(length(unique(test1$pos))))
+    {
+      test_counts<-t(test1[i,] %>% dplyr::select(ends_with("-1")))
+      merged_by_cluster<-inner_join(rownames_to_column(data.frame(counts=test_counts[,1]),var="barcode"),
+                                    rownames_to_column(data.frame(cluster=clusterResults$cellAssigns),var="barcode"))
+      merged_by_cluster<-merged_by_cluster %>% mutate(neoplastic=(cluster!=clusterResults$clusterNormal)) %>%  mutate(cluster=factor(cluster),neoplastic=factor(neoplastic))
+      merged_by_cluster %>% group_by(neoplastic) %>% summarise(mean=median(counts),counts=n())
+      
+      if (mean(merged_by_cluster$counts)>5)
+      {
+        fit=glm.nb(counts~neoplastic+0,data=merged_by_cluster,link=identity,init.theta=0.5,start=c(100,100))
+        
+        if (nrow(coefs_list)>0)
+        {
+          coefs_list=rbind(coefs_list,data.frame(t(fit$coefficients),segment=test1[i,"pos"],chrom=curChrom))
+        }
+        else
+        {
+          coefs_list=data.frame(t(fit$coefficients),segment=test1[i,"pos"],chrom=curChrom)
+        }
+      }
+    }
+  }
+  #iterate through chromosomes
+  allCpts=list()
+  #print outputs of each chromosome
+  pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_segment_scatterplots.pdf"),width=5,height=3)
+  for (curChrom in chromList)
+  {
+    if (curChrom!="chrY" & curChrom  != "chrM")
+    {
+      #compute log ratio
+      withRatio<-coefs_list %>% filter(chrom==curChrom) %>% mutate(ratio=log(neoplasticTRUE+1,base=2) - log(neoplasticFALSE+1,base=2)) %>% dplyr::select(-chrom)
+      withRatio$ratio = 2^withRatio$ratio
+      
+      print(ggplot(withRatio %>% mutate(segment=as.numeric(segment)),aes(segment,ratio)) + geom_smooth(level=0.95,span=0.3) + ggtitle(curChrom))
+      cpts=cpt.meanvar(as.numeric(unlist(withRatio %>% dplyr::select(ratio))),penalty = "AIC",method = "BinSeg",minseglen = minSeglen,Q=20) # can change to 3  for fewer bits
+      cpt_list<-data.frame(end=cpts@cpts, start=lag(cpts@cpts,default=0)+1,mean=cpts@param.est$mean) %>% filter(mean>gainThreshold | mean<lossThreshold) %>% mutate(chrom=curChrom)
+      #append start and end based on loc
+      cpt_list$end=withRatio$segment[cpt_list$end]
+      cpt_list$start=withRatio$segment[cpt_list$start]
+      allCpts=append(allCpts,list(cpt_list))
+    }
+  }
+  dev.off()
+  all_roi<-bind_rows(allCpts)
+  #iterate through regions
+  allVals=list()
+  for (j in 1:nrow(all_roi))
+  {
+    curStart=all_roi$start[j]
+    curEnd=all_roi$end[j]
+    cellSubset=inputMatrix %>% filter(chrom==all_roi$chrom[j])
+    locStart=which(cellSubset$pos==curStart)
+    locEnd=which(cellSubset$pos==curEnd)
+    cellSubset=cellSubset[locStart:locEnd,]
+    merged_by_cluster<-inner_join(rownames_to_column(data.frame(mean=colMeans(cellSubset %>% dplyr::select(ends_with("-1")))),var="barcode"),
+                                  rownames_to_column(data.frame(cluster=clusterResults$cellAssigns),var="barcode"))
+    merged_by_cluster<-merged_by_cluster %>% mutate(neoplastic=(cluster!=clusterResults$clusterNormal)) %>%  mutate(cluster=factor(cluster),neoplastic=factor(neoplastic))
+    merged_by_cluster %>% group_by(neoplastic) %>% summarise(mean=median(mean),counts=n())
+    #can  we feed residuals into  the decomposition?
+    #estimated ratio
+    testdata=(merged_by_cluster %>% dplyr::select(-barcode,-neoplastic))
+    discrims<-lda(cluster~.,data=testdata)
+    preds = discrims %>% predict(testdata)
+    preds$class
+    estimated_losses=bind_cols(left_join(data.frame(cluster=preds$class),
+                                         rownames_to_column(data.frame(discrims$means),var="cluster")) %>% mutate(mean=mean/discrims$means[clusterResults$clusterNormal]),barcode=merged_by_cluster$barcode) %>% mutate(alteration=j)
+    allVals=append(allVals,list(estimated_losses))
+  }
+  #if range less than 0.4 remove column
+  valsTable=bind_rows(allVals)
+  alterationsTable=valsTable %>% dplyr::select(mean,barcode,alteration) # %>% spread(value=mean,key=barcode)
+  #name alterations
+  all_roi<-all_roi %>% mutate(name=sprintf("%s:%s-%s",chrom,start,end),alteration=row_number())
+  final_alterations<-left_join(alterationsTable,all_roi %>% dplyr::select(alteration,name),by="alteration")
+  final_alterations<-final_alterations %>% dplyr::select(barcode, mean,name) %>% spread(key=name,value=mean)
+  all_ranges<-apply(final_alterations %>% dplyr::select(-barcode),2,max)-apply(final_alterations %>% dplyr::select(-barcode),2,min)
+  which(all_ranges>rangeThreshold)
+  final_alterations<-final_alterations[c("barcode",names(which(all_ranges>rangeThreshold)))]
+  #then remove ones with max of one group < X (e.g.  50)
+  clean_list=unlist(final_alterations %>% gather("alteration","value",starts_with("chr")) %>% group_by(alteration,value) %>% summarise(min=n()) %>% arrange(alteration,min) %>% slice_head(n=1) %>% filter(min>minCutoff) %>% dplyr::select(alteration))
+  clean_list<-as.vector(clean_list)
+  power2<-function(x)
+  {
+    return(2^x)
+  }
+  #report as powers of 2 -  estimated CN
+  final_alterations<-final_alterations %>% dplyr::select(c("barcode",clean_list)) %>% mutate_if(is.numeric,list(power2))
+  test1 %>% mutate_if(is.numeric,list(power2))
+  
+  return(final_alterations)
 }

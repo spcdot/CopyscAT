@@ -1,5 +1,5 @@
 Package: CopyscAT
-Version: 0.30
+Version: 0.40
 Depends:
     viridis (>= 0.5.1),
     NMF (>= 0.23.0),
@@ -23,6 +23,7 @@ Depends:
     sp (>= 1.4.0),
     ggplot2 (>= 3.3.0),
     jsonlite (>= 1.7.0),
+    MASS (>= 7.3.54),
     R (>= 2.10)
 RoxygenNote: 7.1.2
 LazyData: true

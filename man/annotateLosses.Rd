@@ -12,7 +12,4 @@ annotateLosses(lossFile)
 \description{
 This function allows you to annotate loss regions
 }
-\examples{
-cat_function()
-}
 \keyword{Losses}

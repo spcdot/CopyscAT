@@ -28,6 +28,8 @@ identifyCNVClusters(
 )
 }
 \arguments{
+\item{inputMatrix}{input matrix after collapsing and filtering steps}
+
 \item{median_iqr}{matrix of medians and IQRs}
 
 \item{useDummyCells}{use pseudodiploid control}
@@ -43,5 +45,5 @@ identifyCNVClusters(
 \item{summaryFunction}{summarising function for chromosome arms (default is trimmed average)}
 }
 \description{
-How the sausage is made - uses Gaussian decomposition to analyse a filtered, normalised input matrix and call putative CNVs
+Uses Gaussian decomposition to analyse a filtered, normalised input matrix and call putative CNVs
 }

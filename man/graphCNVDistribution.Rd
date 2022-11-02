@@ -14,4 +14,7 @@ graphCNVDistribution(inputMatrix, outputSuffix = "_all")
 \description{
 Makes graph of normalised, collapsed fragment data
 }
+\examples{
+graphCNVDistribution(inputMatrix,outputSuffix="unfiltered")
+}
 \keyword{output}

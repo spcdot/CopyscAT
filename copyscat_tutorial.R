@@ -74,7 +74,8 @@ final_cnv_list<-annotateCNV4(candidate_cnvs_clean, saveOutput=TRUE,outputSuffix 
 #this generates a heatmap in your working directory - check it and adjust parameters as needed
 #default parameters: estimatedCellularity=0.8,nmfComponents=5,outputHeatmap=TRUE,cutHeight=0.6
 #change cutHeight (height at which target dendrogram is cut) and nmfComponents as necessary to improve segeregation of clusters in your sample
-nmf_results<-identifyNonNeoplastic(scData_collapse,methodHclust="ward.D")
+
+nmf_results<-identifyNonNeoplastic(scData_collapse,methodHclust="ward.D",cutHeight = 0.4)
 #?identifyNonNeoplastic
 write.table(x=rownames_to_column(data.frame(nmf_results$cellAssigns),var="Barcode"),file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_nmf_clusters.csv"),quote=FALSE,row.names = FALSE,sep=",")
 print(paste("Normal cluster is: ",nmf_results$clusterNormal))
@@ -98,6 +99,7 @@ final_cnv_list<-annotateCNV4B(candidate_cnvs_clean, nmf_results$normalBarcodes, 
 #data smoothing: can provide CNV as list or as an input file (CSV)
 smoothedCNVList<-smoothClusters(scDataSampClusters,inputCNVList = final_cnv_list[[3]],percentPositive = 0.4,removeEmpty = FALSE)
 
+
 #PART 3: identify double minutes / amplifications
 #note: this is slow, and may take ~5 minutes
 #if very large dataset, may run on subset of the data to estimate the amplifications in distinct clusters
@@ -110,10 +112,13 @@ dm_candidates<-dmRead(scData_k_norm,minCells=100,qualityCutoff2 = 100,minThresho
 
 write.table(x=dm_candidates,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"samp_dm.csv"),quote=FALSE,row.names = FALSE,sep=",")
 
-#PART 4: assess putative LOH regions
-#note: this is in beta, interpret results with caution
-loh_regions<-getLOHRegions(scData_k_norm,diffThreshold = 3,lossCutoff = -0.75,minLength = 2e6,minSeg=2,targetFun=IQR,lossCutoffCells = 200,quantileLimit=0.2,cpgCutoff=100,dummyQuantile=0.6,dummyPercentile=0.4,dummySd=0.1)
-write.table(x=loh_regions[[1]],file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"samp_loss.csv"),quote=FALSE,row.names = FALSE,sep=",")
+
+#PART 4:
+#CALLING SEGMENTAL LOSSES/GAINS (on datasets with NMF-detected normals only)
+altered_segments<-getAlteredSegments(scData_k_norm,nmf_results,lossThreshold = 0.6)
+#output here are chromosomal segments and relative estimated copy number
+write.table(x=altered_segments,file=str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"samp_segments.csv"),quote=FALSE,row.names = FALSE,sep=",")
+
 
 #PART 5: quantify cycling cells
 #this uses the signal from a particular chromosome (we use chromosome X as typically not altered in our samples) to identify 2N versus 4N DNA content within cells

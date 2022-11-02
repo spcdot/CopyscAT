@@ -10,11 +10,9 @@ scaleMatrixBins(inputMatrix, binSizeRatio, inColumn)
 \item{inputMatrix}{matrix of input stuff}
 
 \item{binSizeRatio}{ratio to expand by (2 = double bin size)}
+
+\item{inColumn}{input column}
 }
 \description{
 Merges together adjacent windows
 }
-\examples{
-cat_function()
-}
-\keyword{cats}

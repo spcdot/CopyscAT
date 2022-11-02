@@ -30,6 +30,8 @@ identifyDoubleMinutes(
 \item{doPlots}{Plot occasional cells as QC}
 
 \item{imageNumber}{Plot every Nth cell (use in conjunction with doPlots = TRUE)}
+
+\item{minThreshold}{Z-score maximum to continue processing cells (can save time in larger datasets; default 4)}
 }
 \description{
 Identify double minutes on all chromosomes using changepoint analysis
