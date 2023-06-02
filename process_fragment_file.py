@@ -63,7 +63,6 @@ def init_chrom_sizes():
 
 chrom_sizes = init_chrom_sizes()
 print(chrom_sizes)
-
 print("Initializing chromosomes")
 #initialize chromosome bins
 def init_chrom_list_all():
@@ -85,28 +84,31 @@ print("Reading file")
 lines_read = 0
 with gzip.open(file_init,'rt') as reader:
     for line1 in reader:
-        #print(line1 + " " + str(len(cell_ids)))
-       #remove header from new version of cellranger-atac
+      #print(line1 + " " + str(len(cell_ids)))
+      #remove header from new version of cellranger-atac
       if (line1.find('#')!=-1):
+        print("commented header line detected...skipping")
         continue 
-        #remove random chromosomes
-      #if (line1.find('KI')!=-1):
-      #  continue
       line_split = line1.split('\t')
       readLength=int(line_split[2])-int(line_split[1])-1
-      #print(line_split[0] + "\n")
-      if (line_split[3] in cell_ids):
-        setIndex = int(math.floor(int(line_split[1]) / chrom_step))
-        cell_ids[line_split[3]][line_split[0]][setIndex] += readLength
-        cell_counts[line_split[3]] += 1
+      #test if chromosome is in the list
+      if (line_split[0] in chrom_sizes.keys()):
+        #print(line_split[0] + "\n")
+        if (line_split[3] in cell_ids):
+          setIndex = int(math.floor(int(line_split[1]) / chrom_step))
+          cell_ids[line_split[3]][line_split[0]][setIndex] += readLength
+          cell_counts[line_split[3]] += 1
+        else:
+          cell_ids[line_split[3]]=init_chrom_list_all()
+          setIndex = int(math.floor(int(line_split[1]) / chrom_step))
+          cell_ids[line_split[3]][line_split[0]][setIndex] += readLength
+          cell_counts[line_split[3]]=1
       else:
-        cell_ids[line_split[3]]=init_chrom_list_all()
-        setIndex = int(math.floor(int(line_split[1]) / chrom_step))
-        cell_ids[line_split[3]][line_split[0]][setIndex] += readLength
-        cell_counts[line_split[3]]=1
+        #abnormal chromosome - will not include in final results
+        print("warning: chromosome " + line_split[0] + " found in fragment file but not in chromosome file - skipping fragment")
       lines_read+=1
       if lines_read%100000==0:
-            print("Reading line " + str(lines_read) + "\n")
+        print("Reading line " + str(lines_read) + "\n")
 print("File loaded into memory")
 
 
