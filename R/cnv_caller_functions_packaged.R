@@ -2172,15 +2172,15 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
     print("fallback to UCSC REST API (manual table retrieval)")
     cpgResults = jsonlite::fromJSON(sprintf("https://api.genome.ucsc.edu/getData/track?genome=%s;track=cpgIslandExtUnmasked",genomeText),simplifyMatrix=TRUE)
     cytoBandResults = jsonlite::fromJSON(sprintf("https://api.genome.ucsc.edu/getData/track?genome=%s;track=cytoBand",genomeText),simplifyMatrix=TRUE)
-    cytoBandRanges<-GRangesList(cytoBandResults$cytoBand)
-    cytoBandRanges<-unlist(cytoBandRanges)
+    #select specifically
+    cytoBandRanges<-GRanges(cytoBandResults$cytoBand[[1]])
     cpgResultRanges=GRanges()
     #print(names(cpgResults$cpgIslandExtUnmasked))
     for (i in names(cpgResults$cpgIslandExtUnmasked))
     {
       if (length(cpgResults$cpgIslandExtUnmasked[[i]])>0)
       {
-      cpgResultRanges=c(cpgResultRanges,GRanges(cpgResults$cpgIslandExtUnmasked[[i]]))
+        cpgResultRanges=c(cpgResultRanges,GRanges(cpgResults$cpgIslandExtUnmasked[[i]]))
       }
     }
     print(cpgResultRanges)
@@ -2189,16 +2189,16 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   }
   else
   {
-  mySession = browserSession("UCSC")
-  genome(mySession) <- genomeText
-  tbl.cytobands <- getTable(
-    ucscTableQuery(mySession, track="cytoBand",
-                   table="cytoBand"))
-  tbl.cpgIslandExt <- getTable(
-    ucscTableQuery(mySession, track="cpgIslandExtUnmasked",
-                   table="cpgIslandExtUnmasked"))
-  tbl.cytobands<-GRanges(tbl.cytobands)
-  tbl.cpgIslandExt<-GRanges(tbl.cpgIslandExt)
+    mySession = browserSession("UCSC")
+    genome(mySession) <- genomeText
+    tbl.cytobands <- getTable(
+      ucscTableQuery(mySession, track="cytoBand",
+                     table="cytoBand"))
+    tbl.cpgIslandExt <- getTable(
+      ucscTableQuery(mySession, track="cpgIslandExtUnmasked",
+                     table="cpgIslandExtUnmasked"))
+    tbl.cytobands<-GRanges(tbl.cytobands)
+    tbl.cpgIslandExt<-GRanges(tbl.cpgIslandExt)
   }
   tbl.cytobands
   # print(tbl.cytobands)
@@ -2217,7 +2217,7 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   matches<-findOverlaps(tbl.cytobands,tiles,select="all",ignore.strand=TRUE)
   #matches
   a3<-tiles[subjectHits(matches)]
- # subjectHits(matches)
+  # subjectHits(matches)
   # print(tiles)
   # print(a3)
   
@@ -2230,7 +2230,7 @@ generateReferences <- function(genomeObject,genomeText="hg38",tileWidth=1e6,outp
   #label Cytobands
   #https://web.mit.edu/~r/current/arch/i386_linux26/lib/R/library/GenomicRanges/html/GRanges-class.html
   #ALL CLEAN :)
- #mcols(empties)<-cbind.data.frame(mcols(empties),name="")
+  #mcols(empties)<-cbind.data.frame(mcols(empties),name="")
   #empties
   empties<-tiles[-unique(queryHits(matches))]
   mcols(empties)<-cbind.data.frame(mcols(empties),name="p")
