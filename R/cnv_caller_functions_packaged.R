@@ -1308,29 +1308,35 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     numClusts<-maxClust-zeroClusters-1
     #now order vector
     activeClusters<-clust_list[2:(2+numClusts-1)]
-    #reorder the keys and values
-    #reorder keys
-    #print(clust_list[2:(2+numClusts-1)])
-    clust_list[2:(2+numClusts-1)]<-activeClusters[order(activeClusters)]
-  #  print(clust_list[2:(2+numClusts-1)])
-    #copy to final list
-    chrom_clusters_final[m5,2:(2+numClusts-1)]<-activeClusters[order(activeClusters)]
-    #
-    #now reorder the values by the vector using the factor levels trick
-    cell_assignments[,m5+1]<-factor(cell_assignments[,m5+1])
-    #message(length(levels(cell_assignments[,m5+1])))
-    newOrder<-order(activeClusters)
     hasZero<-length(which(cell_assignments[,m5+1]==0))>0
-    if (hasZero) {
-      newOrder<-c(0,newOrder)
+    if (numClusts>1)
+    {
+      clusterOrderList=order(as.numeric(activeClusters[1,]))
+      #reorder the keys and values
+      #reorder keys
+      #copy to final list
+      #only reorder if needed to save resources
+      if (!isSorted(clusterOrderList))
+      {
+        #reorder and reassign
+        chrom_clusters_final[m5,2:(2+numClusts-1)]<-activeClusters[1,order(as.numeric(activeClusters[1,]))]
+        #
+        #now reorder the values by the vector using the factor levels trick
+        cell_assignments[,m5+1]<-factor(cell_assignments[,m5+1])
+        #message(length(levels(cell_assignments[,m5+1])))
+        newOrder<-order(activeClusters)
+        if (hasZero) {
+          newOrder<-c(0,newOrder)
+        }
+        #newOrder
+        #TODO: what about zeros
+        levels(cell_assignments[,m5+1])<-newOrder
+        #tmp_fact<-factor(dm_list_test2$newIndex)
+        #
+        cell_assignments[,m5+1]<-as.numeric(levels(cell_assignments[,m5+1])[cell_assignments[,m5+1]])
+      }
     }
-    #newOrder
-    #TODO: what about zeros
-    levels(cell_assignments[,m5+1])<-newOrder
-    #tmp_fact<-factor(dm_list_test2$newIndex)
-    #
-    cell_assignments[,m5+1]<-as.numeric(levels(cell_assignments[,m5+1])[cell_assignments[,m5+1]])
-  #  print("lags")
+    #  print("lags")
     minDiffA=minDiff-0.00001
     while (minDiffA>0 & minDiffA<minDiff)
     {
@@ -1346,38 +1352,42 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
         ##print("min diff")
         ##print(minDiffA)
         ##print(tmpa)
-        #now iterate
-        for (j1 in 1:nrow(tmpa))
+        #skip looping if clusters far apart
+        if (minDiffA<minDiff)
         {
-          #print(tmpa$clust_diff[j1])
-          if (tmpa$clust_diff[j1]<minDiff)
+          #now iterate
+          for (j1 in 1:nrow(tmpa))
           {
-            #merge these indices
-            #print(chrom_clusters_final[m5,])
-            #print(str(chrom_clusters_final[m5,]))
-            #print(tmpa$init[j1])
-            #print(chrom_clusters_final[m5,tmpa$init[j1]])
-            #weighted average
-            number_a<-length(which(cell_assignments[,m5+1]==(tmpa$init[j1]-1)))
-            number_b<-length(which(cell_assignments[,m5+1]==(tmpa$init2[j1]-1)))
-           # print(number_a)
-          #  print(number_b)
-          #  print(range(as.numeric(cell_assignments[,m5+1])))
-            if ((number_a + number_b)!=0)
+            #print(tmpa$clust_diff[j1])
+            if (tmpa$clust_diff[j1]<minDiff)
             {
-              
-            new_mean<-(chrom_clusters_final[m5,tmpa$init[j1]]*number_a+chrom_clusters_final[m5,tmpa$init2[j1]]*number_b)/(number_a+number_b)
-            #print(new_mean)
-            chrom_clusters_final[m5,tmpa$init[j1]]<-new_mean
-            chrom_clusters_final[m5,tmpa$init2[j1]]<-new_mean
-            #       message(str_c(chrom_clusters_final[m5,i1],lastValue,i1,sep=","))
-            cell_assignments[cell_assignments[,m5+1]==(tmpa$init2[j1]-1),m5+1]=tmpa$init[j1]-1
-            break()
-            }
-            else
-            {
-              #cluster is empty thus not assignable
-              minDiffA = 0
+              #merge these indices
+              #print(chrom_clusters_final[m5,])
+              #print(str(chrom_clusters_final[m5,]))
+              #print(tmpa$init[j1])
+              #print(chrom_clusters_final[m5,tmpa$init[j1]])
+              #weighted average
+              number_a<-length(which(cell_assignments[,m5+1]==(tmpa$init[j1]-1)))
+              number_b<-length(which(cell_assignments[,m5+1]==(tmpa$init2[j1]-1)))
+              # print(number_a)
+              #  print(number_b)
+              #  print(range(as.numeric(cell_assignments[,m5+1])))
+              if ((number_a + number_b)!=0)
+              {
+                
+                new_mean<-(chrom_clusters_final[m5,tmpa$init[j1]]*number_a+chrom_clusters_final[m5,tmpa$init2[j1]]*number_b)/(number_a+number_b)
+                #print(new_mean)
+                chrom_clusters_final[m5,tmpa$init[j1]]<-new_mean
+                chrom_clusters_final[m5,tmpa$init2[j1]]<-new_mean
+                #       message(str_c(chrom_clusters_final[m5,i1],lastValue,i1,sep=","))
+                cell_assignments[cell_assignments[,m5+1]==(tmpa$init2[j1]-1),m5+1]=tmpa$init[j1]-1
+                break()
+              }
+              else
+              {
+                #cluster is empty thus not assignable
+                minDiffA = 0
+              }
             }
           }
         }
@@ -1402,8 +1412,9 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     # message(levels(cell_assignments[,m5+1]))
     cell_assignments[,m5+1]<-as.numeric(levels(cell_assignments[,m5+1])[cell_assignments[,m5+1]])
     #TODO: merge cluster values and medians into a list which we can merge (e.g. chr0_0,0.5))
+    
   }
- # chrom_clusters_final
+  # chrom_clusters_final
   return(list(cell_assignments,chrom_clusters_final))
 }
 #'
