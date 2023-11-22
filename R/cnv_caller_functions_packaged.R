@@ -152,7 +152,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
 {
   sc_t<-data.table(t(inputMatrix))
   #sc_t
-  cellReads<-transpose(sc_t[,lapply(.SD,sum)],keep.names="Cell")
+  cellReads<-data.table::transpose(sc_t[,lapply(.SD,sum)],keep.names="Cell")
   pdf(str_c(scCNVCaller$locPrefix,scCNVCaller$outPrefix,"_signal_distribution.pdf"),width=6,height=4)
   hist(cellReads$V1, breaks=50,main=scCNVCaller$outPrefix,xlab = "Signal")
   abline(v=quantile(cellReads$V1,upperFilterQuantile),col=c("red"),lty=2)
@@ -171,7 +171,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
  # head(sc_lines)
   #blacklistCutoff = 500
   sc_lines<-sc_lines[,lapply(.SD,function(x) x<blacklistCutoff)][,lapply(.SD,sum)]
-  sc_pos<-transpose(sc_lines,keep.names = "Pos")
+  sc_pos<-data.table::transpose(sc_lines,keep.names = "Pos")
   blacklistRegions<-sc_pos[which(sc_pos[,V1>=blacklistPropCutoff]),]$Pos
   print(sprintf("Blaclist regions: %d",length(blacklistRegions)))
   print(sprintf("Total bins: %d",nrow(sc_pos)))
@@ -184,7 +184,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
   print(sc_t[which(sc_pos[,V1<blacklistPropCutoff]),lapply(.SD,function(x) as.numeric(x<blacklistCutoff))][1:10,1:10])
   #print(sc_t2[,1:100])
   
-  sc_zeros<-transpose(sc_t2,keep.names="Cells")
+  sc_zeros<-data.table::transpose(sc_t2,keep.names="Cells")
   #print(sc_zeros)
   #zero_cutoff=zero_cutoff
   zero_list<-sc_zeros[which(sc_zeros[,V1<maxZero])]$Cells
@@ -198,7 +198,7 @@ normalizeMatrixN <- function(inputMatrix,logNorm=FALSE,maxZero=2000,imputeZeros=
   #hist(zeros$Value,breaks=100)
   #zeros$Cell[zeros$cellPass==TRUE]
   tmp1 <- as.data.frame(sc_t,stringsAsFactors=FALSE) %>% dplyr::select(zero_list)
-  raw_medians<-t(transpose(sc_t[,..zero_list])[,lapply(.SD,median)])
+  raw_medians<-t(data.table::transpose(sc_t[,..zero_list])[,lapply(.SD,median)])
   #tmp1
   tmp1<-cbind.data.frame(tmp1,raw_medians,stringsAsFactors=FALSE)
   #impute zeros in cells passing filter
@@ -717,7 +717,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   total_cpg[chrom %in% c(chromXName,chromYName)]
   sckn[,cpg:=total_cpg[chrom %in% c(chromXName,chromYName)]$V1]
   #sckn[,print(.SD)]
-  xy_signal<-transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
+  xy_signal<-data.table::transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
   
   #t(sckn)[2:ncol(sckn),]
   #xy_signal <- as_tibble(apply(t(sckn)[2:ncol(sckn),],2,as.numeric))
@@ -727,12 +727,12 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   logTrans=FALSE
   if (logTrans)
   {
-    xy_signal<-transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
+    xy_signal<-data.table::transpose(sckn[,lapply(.SD,"/",1+log(cpg,base=2)),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
     
     #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% dplyr::select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+log(totalcpg,base=2)))) 
   } else
   {
-    xy_signal<-transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
+    xy_signal<-data.table::transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
     
     #xy_signal <- xy_signal %>% rowwise() %>% mutate(totalcpg=summaryFunction(cpg)) %>% dplyr::select(-cpg) %>% mutate_at(vars(ends_with(scCNVCaller$cellSuffix)),funs(./(1+totalcpg))) 
     sexCutoff=0.25
@@ -760,10 +760,10 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #mm I see the issue - the cutAverage upper quantile busts / overcorrects the cpg - use a median instead
   cpg_density<-sckn[,cpg]
   median_chromosome_density<-sckn[1:(nrow(sckn)),lapply(.SD,summaryFunction),by="chrom"]
-  med_temp<-transpose(median_chromosome_density[,c("cpg"):=NULL],make.names="chrom")
+  med_temp<-data.table::transpose(median_chromosome_density[,c("cpg"):=NULL],make.names="chrom")
   #head(med_temp)
-  transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
-  median_chrom_signal<-transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
+  #transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
+  median_chrom_signal<-data.table::transpose(med_temp[,lapply(.SD,summaryFunction)],keep.names="chrom")
   #print(median_chrom_signal)
   
   
@@ -870,7 +870,7 @@ filterCells <- function(inputMatrix,minimumSegments=40,minDensity=0,signalSDcut=
 computeCenters <- function(inputMatrix,summaryFunction=cutAverage)
 {
   DT1<-data.table(Chrom=inputMatrix$chrom,Cells=inputMatrix %>% dplyr::select(ends_with(scCNVCaller$cellSuffix)))
-  DT1b<-transpose(DT1,make.names = "Chrom")
+  DT1b<-data.table::transpose(DT1,make.names = "Chrom")
   #DT1b<-DT1b[1:(nrow(DT1b)),lapply(.SD,summaryFunction)]
   #DT1b2<-transpose(DT1b,keep.names ="Chrom")
   #median_chrom_signal_filter<-DT1b2[,.(Median=median(V1))]
@@ -1776,7 +1776,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     #print(str(transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")))
     #print(tail(colnames((transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")))))
     #message(targetChrom)
-    IQRv<-transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")[,lapply(.SD,quantile,quantileLimit,na.rm=TRUE)]
+    IQRv<-data.table::transpose(inputMatrixK[,chrom:=NULL],make.names = "pos")[,lapply(.SD,quantile,quantileLimit,na.rm=TRUE)]
     # print(IQRv)
     #IQRv<-apply(inputMatrix  %>% filter(chrom==targetChrom) %>% dplyr::select(scCNVCaller$cellSuffix),1,quantile,0.3,na.rm=TRUE)
     IQRs<-scale(t(IQRv),center=TRUE,scale=TRUE)
@@ -1785,7 +1785,7 @@ getLOHRegions <- function(inputMatrixIn,lossCutoff=(-0.25), uncertaintyCutLoss=0
     }
     #expectedSignal<-inputMatrix %>% filter(chrom==targetChrom) %>% select(-cpg,-pos,-chrom) %>% summarise_if(is.numeric,median) %>% gather(barcode,value) %>% summarise_if(is.numeric,mean)
     #[,chrom:=NULL]
-    expectedSignalN<-transpose(inputMatrixK[,lapply(.SD,max),by="pos"],make.names="pos")[,lapply(.SD,mean)]
+    expectedSignalN<-data.table::transpose(inputMatrixK[,lapply(.SD,max),by="pos"],make.names="pos")[,lapply(.SD,mean)]
     #print(as.vector(IQRs))
     cm<-cpt.meanvar(data=as.vector(IQRs),test.stat="Normal", penalty="AIC",method = "PELT",minseglen = minSeg)
     cptlist<-t(rbind(cm@param.est$mean,cm@cpts))
