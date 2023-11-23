@@ -691,20 +691,21 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #divide signal by cpg density + 1 (To avoid dividing by zero)
   #remove blacklist regions
   # %>% dplyr::filter(cpg!=0)
-  scData_k_norm <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% dplyr::filter(cpg>minCPG)
+  scData_k <- inputMatrix %>% mutate(chromArm=scCNVCaller$cytoband_data$V4,cpg=scCNVCaller$cpg_data$cpg_density) %>% mutate(chrom=str_c(chrom,chromArm)) %>% dplyr::filter(cpg>minCPG)
   if (binExpand>1)
   {
     #collapse bins
-    scData_k_norm <- scaleMatrixBins(scData_k_norm,binSizeRatio = binExpand,"pos")
+    scData_k <- scaleMatrixBins(scData_k,binSizeRatio = binExpand,"pos")
     #rename column
-    scData_k_norm <- scData_k_norm %>% rename(pos = pos_b)
+    scData_k <- scData_k %>% rename(pos = pos_b)
   }
   # %>% dplyr::filter(cpg!=0)
   #gender determination
-  sckn<-data.table(scData_k_norm)
+  sckn<-data.table(scData_k)
   total_cpg<-sckn[,summaryFunction(cpg),by="chrom"]
+  #edit 22-Nov-23 old sckn[,c("blacklist","raw_medians","chromArm","cpg","pos"):=NULL]
   sckn[,c("blacklist","raw_medians","chromArm","cpg","pos"):=NULL]
-  tail(colnames(sckn))
+  #tail(colnames(sckn))
   setkey(sckn,chrom)
   chromXName="chrXq"
   chromYName="chrYq"
@@ -713,8 +714,9 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   y_tmp<-(tail(scCNVCaller$cytoband_data[which(scCNVCaller$cytoband_data$V1=="chrY"),c(1,4)],n=1))
   chromYName<-paste(y_tmp$V1,y_tmp$V4,sep="")
   sckn<-sckn[c(chromXName,chromYName),lapply(.SD,quantile,probs=0.8),by="chrom"]
-  nrow(sckn)
-  total_cpg[chrom %in% c(chromXName,chromYName)]
+  #nrow(sckn)
+  #total_cpg[chrom %in% c(chromXName,chromYName)]
+  #read cpg values
   sckn[,cpg:=total_cpg[chrom %in% c(chromXName,chromYName)]$V1]
   #sckn[,print(.SD)]
   xy_signal<-data.table::transpose(sckn[,lapply(.SD,"/",1+cpg),by="chrom"][,cpg:=NULL],make.names = "chrom")[,lapply(.SD,quantile,0.8)]
@@ -738,7 +740,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
     sexCutoff=0.25
   }
   #print(xy_signal)
-  diffXY<-xy_signal$chrXq-xy_signal$chrYq
+  diffXY<-xy_signal[,..chromXName]-xy_signal[,..chromYName]
   # print(abs(diffXY))
   
   if (abs(diffXY)<sexCutoff)
@@ -748,7 +750,7 @@ collapseChrom3N<-function(inputMatrix,minimumSegments=40,summaryFunction=cutAver
   #top part works awesome
   
   #now to convert rest
-  sckn<-data.table(scData_k_norm)
+  sckn<-data.table(scData_k)
   #print(nrow(sckn))
   sckn <- sckn[chromArm!="cen"][blacklist==FALSE]
   #print(nrow(sckn))
