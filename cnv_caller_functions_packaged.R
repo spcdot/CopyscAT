@@ -1313,19 +1313,20 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
     hasZero<-length(which(cell_assignments[,m5+1]==0))>0
     if (numClusts>1)
     {
+      clusterOrderList=order(as.numeric(activeClusters[1,]))
       #reorder the keys and values
       #reorder keys
       #copy to final list
       #only reorder if needed to save resources
-      if (!isSorted(as.numeric(activeClusters[1,])))
+      if (!isSorted(clusterOrderList))
       {
         #reorder and reassign
-        chrom_clusters_final[m5,2:(2+numClusts-1)]<-as.matrix(activeClusters)[base::order(as.numeric(activeClusters[1,]))]
+        chrom_clusters_final[m5,2:(2+numClusts-1)]<-activeClusters[1,order(as.numeric(activeClusters[1,]))]
         #
         #now reorder the values by the vector using the factor levels trick
         cell_assignments[,m5+1]<-factor(cell_assignments[,m5+1])
         #message(length(levels(cell_assignments[,m5+1])))
-        newOrder<-base::order(as.numeric(activeClusters[1,]))
+        newOrder<-order(activeClusters)
         if (hasZero) {
           newOrder<-c(0,newOrder)
         }
@@ -1418,7 +1419,6 @@ clusterCNV<-function(initialResultList,medianIQR,maxClust=4,minDiff=0.25){
   # chrom_clusters_final
   return(list(cell_assignments,chrom_clusters_final))
 }
-
 #'
 #' annotateCNV3
 #' 
